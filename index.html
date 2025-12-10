@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chess Coordinate Defense</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brown: '#551e19',
+              gold: '#e6b17e',
+              cream: '#f7d5b4',
+              white: '#ffffff',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            animation: {
+              'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+              'pulse-gold': 'pulse-gold 2s infinite',
+              'float': 'float 3s ease-in-out infinite',
+            },
+            keyframes: {
+              shake: {
+                '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+              },
+              'pulse-gold': {
+                '0%, 100%': { boxShadow: '0 0 0 0 rgba(230, 177, 126, 0.7)' },
+                '50%': { boxShadow: '0 0 0 10px rgba(230, 177, 126, 0)' }
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-5px)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Custom scrollbar to match theme */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f7d5b4;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #e6b17e;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #551e19;
+      }
+      /* Clean, flat, coach-grade UI */
+      .ui-panel {
+        background: #551e19;
+        color: #f7d5b4;
+        border: 2px solid #e6b17e;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-cream text-brown h-screen w-screen overflow-hidden selection:bg-gold selection:text-brown font-sans flex items-center justify-center">
+    <div id="root" class="w-full h-full"></div>
+  </body>
+</html>
