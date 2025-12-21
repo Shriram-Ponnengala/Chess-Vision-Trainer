@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2 } from 'lucide-react';
+import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
 import { GameState, Coordinate, GameStats, MoveHistory } from './types';
 import { MAIN_DURATION, getRandomCoordinate, coordinateToString } from './constants';
 import ChessBoard from './components/ChessBoard';
@@ -21,16 +21,57 @@ const App: React.FC = () => {
   const [coachFeedback, setCoachFeedback] = useState<string>('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [lastRunAccuracy, setLastRunAccuracy] = useState<number | null>(null);
 
   // Gameplay State
   const [activeTarget, setActiveTarget] = useState<Coordinate | null>(null);
   const [planeProgress, setPlaneProgress] = useState(0); // 0 to 100
   const [lastResult, setLastResult] = useState<{ coord: Coordinate; success: boolean } | null>(null);
   const [isLanding, setIsLanding] = useState(false);
+  const [isExploding, setIsExploding] = useState(false);
 
   // Refs for loops
   const requestRef = useRef<number>();
   const spawnTimeRef = useRef<number>(0);
+
+  // --- Sound Logic ---
+  const playSound = useCallback((type: 'correct' | 'wrong') => {
+    if (isMuted) return;
+
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      if (type === 'correct') {
+        // Soft chime: High frequency sine wave with quick decay
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+        gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } else {
+        // Soft thud: Low frequency triangle wave with decay
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.25);
+        gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      }
+    } catch (e) {
+      // Ignore audio errors
+    }
+  }, [isMuted]);
 
   // --- Game Loop Logic ---
 
@@ -64,7 +105,8 @@ const App: React.FC = () => {
   }, [activeTarget, gameState, spawnPlane]);
 
   const updateGame = useCallback((time: number) => {
-    if (isPaused || gameState !== GameState.MAIN_PLAY || isLanding) {
+    // Stop updates if paused, not playing, landing, or exploding
+    if (isPaused || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) {
       requestRef.current = requestAnimationFrame((t) => updateGame(t));
       return;
     }
@@ -84,7 +126,7 @@ const App: React.FC = () => {
     });
 
     requestRef.current = requestAnimationFrame((t) => updateGame(t));
-  }, [gameState, timeLeft, handleMiss, isPaused, isLanding]);
+  }, [gameState, timeLeft, handleMiss, isPaused, isLanding, isExploding]);
 
   // Timer Effect
   useEffect(() => {
@@ -119,6 +161,14 @@ const App: React.FC = () => {
     setGameState(GameState.SUMMARY);
     setIsLoadingFeedback(true);
     const accuracy = Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100);
+    
+    // Accuracy Index Logic
+    const storedAccuracy = localStorage.getItem('lastRunAccuracy');
+    if (storedAccuracy) {
+      setLastRunAccuracy(parseInt(storedAccuracy, 10));
+    }
+    localStorage.setItem('lastRunAccuracy', accuracy.toString());
+
     const feedback = await getCoachFeedback(history, stats.score, accuracy);
     setCoachFeedback(feedback);
     setIsLoadingFeedback(false);
@@ -127,7 +177,7 @@ const App: React.FC = () => {
   // --- Interaction ---
 
   const handleSquareClick = (coord: Coordinate) => {
-    if (isPaused || !activeTarget || gameState !== GameState.MAIN_PLAY || isLanding) return;
+    if (isPaused || !activeTarget || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) return;
 
     const isCorrect = coord.file === activeTarget.file && coord.rank === activeTarget.rank;
     const reactionTime = Date.now() - spawnTimeRef.current;
@@ -136,6 +186,7 @@ const App: React.FC = () => {
     setTimeout(() => setLastResult(null), 250);
 
     if (isCorrect) {
+      playSound('correct');
       // Updated Scoring Logic
       setStats(prev => {
         const newStreak = prev.streak + 1;
@@ -170,8 +221,14 @@ const App: React.FC = () => {
       }, 400); // Matches animation duration
 
     } else {
-        // Penalty for wrong click: Break streak
-        setStats(prev => ({ ...prev, streak: 0 }));
+        // Wrong Click Logic: Trigger Explosion
+        playSound('wrong');
+        setIsExploding(true);
+        // Note: Streak reset happens in handleMiss(), called after animation
+        setTimeout(() => {
+          setIsExploding(false);
+          handleMiss(); // Proceed to next plane and count as miss
+        }, 400);
     }
   };
 
@@ -183,6 +240,8 @@ const App: React.FC = () => {
     setCoachFeedback('');
     setIsPaused(false);
     setIsLanding(false);
+    setIsExploding(false);
+    setLastRunAccuracy(null);
     
     // Start game immediately
     setGameState(GameState.MAIN_PLAY);
@@ -216,7 +275,7 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-               {/* Timer Group */}
+               {/* Time Group */}
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
                  <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Time</span>
                  <span className={`text-xl md:text-3xl font-black leading-none tabular-nums tracking-tight drop-shadow-sm transition-colors duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse' : 'text-white'}`}>
@@ -224,14 +283,30 @@ const App: React.FC = () => {
                  </span>
               </div>
 
-              {/* Pause Button */}
-              <button 
-                onClick={() => setIsPaused(!isPaused)}
-                className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
-                aria-label={isPaused ? "Resume" : "Pause"}
-              >
-                {isPaused ? <Play size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" /> : <Pause size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" />}
-              </button>
+              {/* Controls Group */}
+              <div className="flex items-center gap-2">
+                {/* Sound Toggle */}
+                <button 
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
+                  aria-label={isMuted ? "Unmute" : "Mute"}
+                >
+                  {isMuted ? (
+                    <VolumeX size={18} className="md:w-5 md:h-5 text-white/50 group-hover:text-gold transition-colors" />
+                  ) : (
+                    <Volume2 size={18} className="md:w-5 md:h-5 text-white group-hover:text-gold transition-colors" />
+                  )}
+                </button>
+
+                {/* Pause Button */}
+                <button 
+                  onClick={() => setIsPaused(!isPaused)}
+                  className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
+                  aria-label={isPaused ? "Resume" : "Pause"}
+                >
+                  {isPaused ? <Play size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" /> : <Pause size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" />}
+                </button>
+              </div>
             </div>
          </div>
          
@@ -264,6 +339,7 @@ const App: React.FC = () => {
           lastResult={lastResult}
           planeProgress={gameState === GameState.MAIN_PLAY && !isPaused ? planeProgress : undefined}
           isLanding={isLanding}
+          isExploding={isExploding}
         />
       </div>
 
@@ -321,7 +397,7 @@ const App: React.FC = () => {
               Session Complete
             </div>
             
-            <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 md:gap-5 mb-6 md:mb-8">
+            <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 md:gap-5 mb-4 md:mb-5">
               <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-brown/5 text-center group hover:shadow-md transition-shadow">
                 <div className="text-[9px] md:text-[10px] uppercase font-bold text-brown/40 mb-1 md:mb-2 tracking-wider">Score</div>
                 <div className="text-3xl md:text-4xl font-black text-brown tracking-tighter group-hover:scale-110 transition-transform duration-300">{stats.score}</div>
@@ -332,6 +408,18 @@ const App: React.FC = () => {
                   {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
                 </div>
               </div>
+            </div>
+
+            {/* Accuracy Index Block */}
+            <div className="text-center mb-6 md:mb-8">
+               <div className="text-[10px] uppercase font-bold text-brown/40 tracking-wider">Accuracy Index</div>
+               <div className="text-xl font-black text-brown leading-none my-1">
+                  {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
+               </div>
+               <div className="text-[9px] text-brown/50">Tracks board-coordinate accuracy per run.</div>
+               {lastRunAccuracy !== null && (
+                  <div className="text-[9px] text-brown/60 font-bold mt-1">Last Run: {lastRunAccuracy}%</div>
+               )}
             </div>
 
             <div className="bg-white/60 rounded-2xl p-5 md:p-6 mb-6 md:mb-8 border border-white/50 shadow-inner">

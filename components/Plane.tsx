@@ -7,9 +7,10 @@ interface PlaneProps {
   target: Coordinate;
   progress: number; // 0 to 100
   landingDest?: { x: number; y: number };
+  isExploding?: boolean;
 }
 
-const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest }) => {
+const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExploding }) => {
   const isLanding = !!landingDest;
   
   // Position Logic
@@ -24,14 +25,29 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest }) => {
       style={{ 
         left,
         top,
-        transform: `translate(-50%, -50%) scale(${isLanding ? 0.5 : 1 + (progress / 300)})`, // Scale down on landing
-        opacity: isLanding ? 0.8 : 1
+        // Scale logic: Landing shrinks it, Falling grows slightly.
+        transform: `translate(-50%, -50%) ${isLanding ? 'scale(0.5)' : `scale(${1 + (progress / 300)})`}`,
+        transition: isLanding ? 'all 0.3s ease-out' : 'none'
       }}
     >
-      <div className="relative flex flex-col items-center">
-        {/* The Plane Icon - White for neutral base */}
-        {/* Rotated 135deg to point straight down (Lucide Plane points NE by default) */}
-        {/* Filter applied to wrapper so shadow stays vertical regardless of rotation */}
+      {/* Explosion Effect Layer - Renders ON TOP of the plane */}
+      {isExploding && (
+        <div className="absolute inset-0 flex items-center justify-center z-50">
+           {/* White Flash: Instant bright burst */}
+           <div className="absolute w-12 h-12 bg-white rounded-full opacity-80 animate-[ping_0.2s_ease-out_1]" />
+           {/* Gold Ring: Expanding shockwave */}
+           <div className="absolute w-16 h-16 border-4 border-gold rounded-full opacity-0 animate-[ping_0.35s_cubic-bezier(0,0,0.2,1)_1]" />
+           {/* Gold Cloud: Dissipating body */}
+           <div className="w-20 h-20 bg-gold/40 rounded-full animate-[pulse_0.35s_ease-out_1]" />
+        </div>
+      )}
+
+      {/* Plane Content Layer - Fades out and bursts slightly when exploding */}
+      <div 
+        className={`relative flex flex-col items-center transition-all duration-300 ease-out ${
+          isExploding ? 'opacity-0 scale-125 blur-sm' : 'opacity-100 scale-100'
+        }`}
+      >
         <div 
           className="relative z-10"
           style={{ filter: 'drop-shadow(0px 4px 0px #551e19)' }}
@@ -42,7 +58,6 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest }) => {
            />
         </div>
 
-        {/* The Coordinate Label - Hide during landing to clean up visual */}
         {!isLanding && (
           <div className="mt-2 z-20">
             <div className="bg-brown text-white font-black px-4 py-1.5 rounded-lg text-lg shadow-lg border-2 border-gold tracking-widest">
@@ -52,8 +67,8 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest }) => {
         )}
       </div>
       
-      {/* Speed Lines Trail - Hide during landing */}
-      {!isLanding && (
+      {/* Speed Lines Trail - Hide during landing or explosion */}
+      {!isLanding && !isExploding && (
         <div className="w-0.5 h-16 bg-gradient-to-t from-gold to-transparent -mt-10 opacity-60"></div>
       )}
     </div>

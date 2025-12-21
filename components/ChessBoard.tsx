@@ -9,6 +9,7 @@ interface ChessBoardProps {
   lastResult: { coord: Coordinate; success: boolean } | null;
   planeProgress?: number;
   isLanding?: boolean;
+  isExploding?: boolean;
 }
 
 const ChessBoard: React.FC<ChessBoardProps> = ({ 
@@ -16,7 +17,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   activeTarget, 
   lastResult,
   planeProgress = 0,
-  isLanding = false
+  isLanding = false,
+  isExploding = false
 }) => {
   
   const getSquareColor = (fileIndex: number, rankIndex: number) => {
@@ -97,10 +99,10 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
           ))}
 
           {/* Overlay: Plane & Flight Path */}
-          {activeTarget && (typeof planeProgress === 'number' || isLanding) && (
+          {activeTarget && (typeof planeProgress === 'number' || isLanding || isExploding) && (
             <>
-              {/* Flight Path Line */}
-              {isLanding && (
+              {/* Flight Path Line - only show when landing (correct) or falling (normal) - hide on explosion */}
+              {isLanding && !isExploding && (
                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
                   <line
                     x1="50%"
@@ -126,7 +128,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
               <Plane 
                 target={activeTarget} 
                 progress={planeProgress} 
-                landingDest={isLanding ? getTargetPosition(activeTarget) : undefined} 
+                landingDest={isLanding ? getTargetPosition(activeTarget) : undefined}
+                isExploding={isExploding}
               />
             </>
           )}
