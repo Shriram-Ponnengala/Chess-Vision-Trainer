@@ -1,13 +1,15 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
-import { GameState, Coordinate, GameStats, MoveHistory } from './types';
-import { MAIN_DURATION, getRandomCoordinate, coordinateToString } from './constants';
+import { GameState, Coordinate, GameStats, MoveHistory, Difficulty } from './types';
+import { MAIN_DURATION, getRandomCoordinate, coordinateToString, DIFFICULTY_SETTINGS } from './constants';
 import ChessBoard from './components/ChessBoard';
 import { getCoachFeedback } from './services/geminiService';
 
 const App: React.FC = () => {
   // State
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [stats, setStats] = useState<GameStats>({
     score: 0,
     streak: 0,
@@ -51,15 +53,13 @@ const App: React.FC = () => {
       gainNode.connect(ctx.destination);
 
       if (type === 'correct') {
-        // Soft chime: High frequency sine wave with quick decay
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
         osc.start();
         osc.stop(ctx.currentTime + 0.15);
       } else {
-        // Soft thud: Low frequency triangle wave with decay
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(150, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.25);
@@ -68,9 +68,7 @@ const App: React.FC = () => {
         osc.start();
         osc.stop(ctx.currentTime + 0.25);
       }
-    } catch (e) {
-      // Ignore audio errors
-    }
+    } catch (e) {}
   }, [isMuted]);
 
   // --- Game Loop Logic ---
@@ -91,7 +89,6 @@ const App: React.FC = () => {
     setLastResult(null); 
     setIsLanding(false);
     
-    // Record history
     if (activeTarget) {
       setHistory(prev => [...prev, {
         target: activeTarget,
@@ -101,20 +98,21 @@ const App: React.FC = () => {
       }]);
     }
 
-    spawnPlane();
-  }, [activeTarget, gameState, spawnPlane]);
+    // Spawn after difficulty-based delay
+    setTimeout(() => {
+      if (gameState === GameState.MAIN_PLAY) spawnPlane();
+    }, DIFFICULTY_SETTINGS[difficulty].spawnDelay);
+  }, [activeTarget, gameState, spawnPlane, difficulty]);
 
   const updateGame = useCallback((time: number) => {
-    // Stop updates if paused, not playing, landing, or exploding
     if (isPaused || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) {
       requestRef.current = requestAnimationFrame((t) => updateGame(t));
       return;
     }
 
-    // Move Plane
-    // Speed formula: Base speed + acceleration over time
+    const config = DIFFICULTY_SETTINGS[difficulty];
     const timeElapsed = MAIN_DURATION - timeLeft;
-    const speed = 0.25 + (timeElapsed / 100) * 0.5; // Increases over time
+    const speed = config.baseSpeed + (timeElapsed / MAIN_DURATION) * config.speedScaling;
     
     setPlaneProgress(prev => {
       const next = prev + speed;
@@ -126,9 +124,8 @@ const App: React.FC = () => {
     });
 
     requestRef.current = requestAnimationFrame((t) => updateGame(t));
-  }, [gameState, timeLeft, handleMiss, isPaused, isLanding, isExploding]);
+  }, [gameState, timeLeft, handleMiss, isPaused, isLanding, isExploding, difficulty]);
 
-  // Timer Effect
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (!isPaused && gameState === GameState.MAIN_PLAY) {
@@ -145,7 +142,6 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [gameState, isPaused]);
 
-  // Animation Loop Trigger
   useEffect(() => {
     requestRef.current = requestAnimationFrame((t) => updateGame(t));
     return () => {
@@ -162,7 +158,6 @@ const App: React.FC = () => {
     setIsLoadingFeedback(true);
     const accuracy = Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100);
     
-    // Accuracy Index Logic
     const storedAccuracy = localStorage.getItem('lastRunAccuracy');
     if (storedAccuracy) {
       setLastRunAccuracy(parseInt(storedAccuracy, 10));
@@ -173,8 +168,6 @@ const App: React.FC = () => {
     setCoachFeedback(feedback);
     setIsLoadingFeedback(false);
   };
-
-  // --- Interaction ---
 
   const handleSquareClick = (coord: Coordinate) => {
     if (isPaused || !activeTarget || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) return;
@@ -187,15 +180,10 @@ const App: React.FC = () => {
 
     if (isCorrect) {
       playSound('correct');
-      // Updated Scoring Logic
       setStats(prev => {
         const newStreak = prev.streak + 1;
-        let pointsToAdd = 5; // Base points
-
-        // Streak Bonus: Add 10 extra points every 5 streak intervals
-        if (newStreak % 5 === 0) {
-          pointsToAdd += 10;
-        }
+        let pointsToAdd = 5;
+        if (newStreak % 5 === 0) pointsToAdd += 10;
 
         return {
           ...prev,
@@ -213,26 +201,21 @@ const App: React.FC = () => {
         phase: 'main'
       }]);
 
-      // Trigger Landing Animation
       setIsLanding(true);
       setTimeout(() => {
         setIsLanding(false);
         spawnPlane();
-      }, 400); // Matches animation duration
+      }, 400 + DIFFICULTY_SETTINGS[difficulty].spawnDelay);
 
     } else {
-        // Wrong Click Logic: Trigger Explosion
         playSound('wrong');
         setIsExploding(true);
-        // Note: Streak reset happens in handleMiss(), called after animation
         setTimeout(() => {
           setIsExploding(false);
-          handleMiss(); // Proceed to next plane and count as miss
+          handleMiss();
         }, 400);
     }
   };
-
-  // --- Flow Control ---
 
   const startGame = () => {
     setStats({ score: 0, streak: 0, maxStreak: 0, hits: 0, misses: 0, totalSpawns: 0 });
@@ -243,30 +226,24 @@ const App: React.FC = () => {
     setIsExploding(false);
     setLastRunAccuracy(null);
     
-    // Start game immediately
     setGameState(GameState.MAIN_PLAY);
     setTimeLeft(MAIN_DURATION);
     spawnPlane();
   };
 
-  // --- Render Helpers ---
-
   const renderHUD = () => {
     const timePercent = (timeLeft / MAIN_DURATION) * 100;
     
-    // Aesthetic update: Glassmorphism effect, subtle border, improved spacing, mobile responsive
     return (
       <div className="w-full fixed top-0 left-0 right-0 z-40 flex flex-col items-center pointer-events-none">
          <div className="w-full bg-brown/95 backdrop-blur-md text-cream shadow-xl border-b border-white/10 py-2 md:pt-4 md:pb-3 px-3 md:px-6 pointer-events-auto transition-all duration-300">
             <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
               
-              {/* Score Group */}
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
                  <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Score</span>
                  <span className="text-xl md:text-3xl font-black leading-none text-white tracking-tight drop-shadow-sm tabular-nums">{stats.score}</span>
               </div>
 
-              {/* Streak Group */}
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
                  <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Streak</span>
                  <div className="flex items-center gap-1 md:gap-1.5">
@@ -275,7 +252,6 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-               {/* Time Group */}
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
                  <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Time</span>
                  <span className={`text-xl md:text-3xl font-black leading-none tabular-nums tracking-tight drop-shadow-sm transition-colors duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse' : 'text-white'}`}>
@@ -283,9 +259,7 @@ const App: React.FC = () => {
                  </span>
               </div>
 
-              {/* Controls Group */}
               <div className="flex items-center gap-2">
-                {/* Sound Toggle */}
                 <button 
                   onClick={() => setIsMuted(!isMuted)}
                   className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
@@ -298,7 +272,6 @@ const App: React.FC = () => {
                   )}
                 </button>
 
-                {/* Pause Button */}
                 <button 
                   onClick={() => setIsPaused(!isPaused)}
                   className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
@@ -310,7 +283,6 @@ const App: React.FC = () => {
             </div>
          </div>
          
-         {/* Refined Progress Bar */}
          <div className="w-full h-1 md:h-1.5 bg-brown/50">
             <div 
               className="h-full bg-gradient-to-r from-gold to-[#f0cfa5] shadow-[0_0_10px_rgba(230,177,126,0.5)] transition-all duration-1000 ease-linear rounded-r-full"
@@ -324,14 +296,11 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center relative font-sans bg-cream overflow-hidden">
       
-      {/* Background Decor - Refined, softer glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gold rounded-full opacity-10 pointer-events-none blur-[100px] animate-pulse"></div>
       <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-cream via-cream to-[#edcbb0] opacity-50 pointer-events-none"></div>
 
-      {/* Game HUD */}
       {gameState === GameState.MAIN_PLAY && renderHUD()}
 
-      {/* Main Game Area */}
       <div className="relative z-10 mt-[5.5rem] md:mt-24 flex-1 flex flex-col justify-center w-full max-w-[600px] px-2 md:px-4">
         <ChessBoard 
           onSquareClick={handleSquareClick}
@@ -343,7 +312,6 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Menus / Overlays - Styled with strict palette and premium feel */}
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-cream/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in duration-300">
           <div className="bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-brown/10 border border-white max-w-lg w-full mx-4 transform transition-all hover:scale-[1.005]">
@@ -354,7 +322,28 @@ const App: React.FC = () => {
             <h1 className="text-3xl md:text-4xl font-black text-brown mb-2 tracking-tight">Plane to E4</h1>
             <p className="text-brown/60 mb-6 md:mb-8 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em]">Learn Chess Coordinates at Jet Speed!</p>
             
-            {/* Rules Section - Cleaner container */}
+            {/* Difficulty Selection */}
+            <div className="mb-8">
+              <h3 className="font-bold text-brown/90 text-[10px] uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
+                Select Difficulty
+              </h3>
+              <div className="grid grid-cols-3 gap-2 p-1.5 bg-brown/5 rounded-2xl border border-brown/5">
+                {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDifficulty(d)}
+                    className={`py-2.5 rounded-xl font-bold text-xs uppercase transition-all duration-200 ${
+                      difficulty === d 
+                        ? 'bg-brown text-gold shadow-lg shadow-brown/20' 
+                        : 'text-brown/40 hover:text-brown/60'
+                    }`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="text-left bg-cream/20 p-4 md:p-6 rounded-2xl mb-6 md:mb-8 border border-brown/5">
                 <h3 className="font-bold text-brown/90 text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-gold"></span> 
@@ -363,19 +352,15 @@ const App: React.FC = () => {
                 <ul className="text-xs md:text-sm text-brown/70 space-y-2 md:space-y-2.5 list-none font-medium pl-1">
                     <li className="flex items-start gap-2 md:gap-3">
                       <span className="text-gold font-bold">•</span>
-                      Planes descend with coordinates (e.g. E4)
+                      Land planes by clicking the matching square
                     </li>
                     <li className="flex items-start gap-2 md:gap-3">
                       <span className="text-gold font-bold">•</span>
-                      Click the matching square to land the plane
+                      Speed increases over 60 seconds
                     </li>
                     <li className="flex items-start gap-2 md:gap-3">
                       <span className="text-gold font-bold">•</span>
-                      +5 points per landing. +10 bonus every 5 streak!
-                    </li>
-                    <li className="flex items-start gap-2 md:gap-3">
-                      <span className="text-gold font-bold">•</span>
-                      Speed increases. Game lasts 100 seconds.
+                      Maintain streaks for massive bonus points
                     </li>
                 </ul>
             </div>
@@ -384,7 +369,7 @@ const App: React.FC = () => {
               onClick={startGame}
               className="group w-full bg-brown text-white font-bold text-base md:text-lg py-4 md:py-5 rounded-2xl shadow-xl shadow-brown/20 hover:shadow-brown/40 hover:bg-[#4a1915] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 border border-transparent hover:border-gold/10"
             >
-              <Play size={20} className="md:w-[22px] md:h-[22px] fill-current group-hover:scale-110 transition-transform" /> START GAME
+              <Play size={20} className="md:w-[22px] md:h-[22px] fill-current group-hover:scale-110 transition-transform" /> START MISSION
             </button>
           </div>
         </div>
@@ -394,7 +379,7 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-brown/95 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in zoom-in-95 duration-300">
           <div className="bg-cream text-brown p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl max-w-md w-full mx-4 border border-gold/30 relative">
             <div className="absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 bg-gold text-brown px-6 md:px-8 py-2 md:py-3 rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-xs shadow-xl border-4 border-brown whitespace-nowrap">
-              Session Complete
+              Run Complete
             </div>
             
             <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 md:gap-5 mb-4 md:mb-5">
@@ -410,7 +395,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Accuracy Index Block */}
             <div className="text-center mb-6 md:mb-8">
                <div className="text-[10px] uppercase font-bold text-brown/40 tracking-wider">Accuracy Index</div>
                <div className="text-xl font-black text-brown leading-none my-1">
@@ -447,11 +431,10 @@ const App: React.FC = () => {
         </div>
       )}
       
-      {/* Pause Overlay - Refined */}
       {isPaused && (
         <div className="absolute inset-0 bg-brown/80 backdrop-blur-md z-50 flex items-center justify-center animate-in fade-in duration-200 p-4">
           <div className="bg-white p-8 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex flex-col items-center w-[90%] max-w-[320px] border border-white/20">
-             <span className="font-black text-xl md:text-2xl text-brown mb-8 md:mb-10 tracking-[0.2em] uppercase opacity-90 text-center">Game Paused</span>
+             <span className="font-black text-xl md:text-2xl text-brown mb-8 md:mb-10 tracking-[0.2em] uppercase opacity-90 text-center">Paused</span>
              
              <button 
                 onClick={() => setIsPaused(false)}

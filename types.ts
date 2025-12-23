@@ -1,3 +1,4 @@
+
 export type File = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h';
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -5,6 +6,8 @@ export interface Coordinate {
   file: File;
   rank: Rank;
 }
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 export interface GameStats {
   score: number;
