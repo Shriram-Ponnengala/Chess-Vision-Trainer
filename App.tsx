@@ -343,32 +343,32 @@ const App: React.FC = () => {
 
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-cream/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-300">
-          <div className="bg-white p-10 md:p-14 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(85,30,25,0.15)] border border-white max-w-lg w-full transform transition-all">
+          <div className="bg-white p-8 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(85,30,25,0.12)] border border-white max-w-md w-full transform transition-all">
             
             <button 
               onClick={() => setIsMuted(!isMuted)}
-              className="absolute top-8 right-8 w-11 h-11 rounded-2xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-200 border border-brown/5"
+              className="absolute top-6 right-6 w-9 h-9 rounded-xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-200 border border-brown/5"
             >
-              {isMuted ? <VolumeX size={20} className="text-brown/30" /> : <Volume2 size={20} className="text-brown/60" />}
+              {isMuted ? <VolumeX size={18} className="text-brown/30" /> : <Volume2 size={18} className="text-brown/60" />}
             </button>
 
-            <div className="w-20 h-20 bg-brown rounded-2xl mx-auto mb-8 flex items-center justify-center shadow-xl shadow-brown/20 -rotate-2 hover:rotate-0 transition-transform duration-500">
-               <PlaneIcon size={40} className="text-white" />
+            <div className="w-16 h-16 bg-brown rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg shadow-brown/10 -rotate-2 hover:rotate-0 transition-transform duration-500">
+               <PlaneIcon size={32} className="text-white" />
             </div>
             
-            <h1 className="text-4xl md:text-5xl font-bold text-brown mb-3 tracking-tight">Plane to E4</h1>
-            <p className="text-brown/40 mb-10 font-bold text-xs uppercase tracking-[0.3em] leading-relaxed">Advanced Coordinate Mastery</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-brown mb-2 tracking-tight">Plane to E4</h1>
+            <p className="text-brown/40 mb-6 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-relaxed">Advanced Coordinate Mastery</p>
             
-            <div className="mb-10">
-              <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-4">Choose Intensity</h3>
-              <div className="grid grid-cols-3 gap-3 p-2 bg-brown/5 rounded-[1.5rem] border border-brown/5">
+            <div className="mb-6">
+              <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-3">Choose Intensity</h3>
+              <div className="grid grid-cols-3 gap-2 p-1.5 bg-brown/5 rounded-[1.25rem] border border-brown/5">
                 {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
                   <button
                     key={d}
                     onClick={() => setDifficulty(d)}
-                    className={`py-3 rounded-xl font-bold text-xs uppercase transition-all duration-300 ${
+                    className={`py-2.5 rounded-xl font-bold text-[10px] md:text-xs uppercase transition-all duration-300 ${
                       difficulty === d 
-                        ? 'bg-brown text-gold shadow-lg shadow-brown/20' 
+                        ? 'bg-brown text-gold shadow-md shadow-brown/15' 
                         : 'text-brown/40 hover:text-brown/70 hover:bg-brown/5'
                     }`}
                   >
@@ -378,22 +378,22 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-left bg-cream/30 p-8 rounded-3xl mb-10 border border-brown/5">
-                <h3 className="font-bold text-brown/90 text-xs uppercase tracking-widest mb-5 flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gold"></div> 
+            <div className="text-left bg-cream/30 p-6 rounded-2xl mb-6 border border-brown/5">
+                <h3 className="font-bold text-brown/90 text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-gold"></div> 
                   Program Overview
                 </h3>
-                <ul className="text-sm text-brown/70 space-y-4 font-medium">
-                    <li className="flex items-center gap-4">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                <ul className="text-xs text-brown/70 space-y-3 font-medium">
+                    <li className="flex items-center gap-3">
+                      <span className="w-1 h-1 rounded-full bg-gold/50"></span>
                       Identify coordinates with 100% precision
                     </li>
-                    <li className="flex items-center gap-4">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                    <li className="flex items-center gap-3">
+                      <span className="w-1 h-1 rounded-full bg-gold/50"></span>
                       Adaptive speed over 60-second intervals
                     </li>
-                    <li className="flex items-center gap-4">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                    <li className="flex items-center gap-3">
+                      <span className="w-1 h-1 rounded-full bg-gold/50"></span>
                       AI-driven performance analysis
                     </li>
                 </ul>
@@ -401,9 +401,9 @@ const App: React.FC = () => {
 
             <button 
               onClick={startGame}
-              className="group w-full bg-brown text-white font-bold text-lg py-5 rounded-2xl shadow-2xl shadow-brown/20 hover:bg-[#4a1915] active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-3"
+              className="group w-full bg-brown text-white font-bold text-base py-4 rounded-xl shadow-xl shadow-brown/20 hover:bg-[#4a1915] active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2"
             >
-              <Play size={22} className="fill-current group-hover:scale-110 transition-transform" /> COMMENCE TRAINING
+              <Play size={20} className="fill-current group-hover:scale-110 transition-transform" /> COMMENCE TRAINING
             </button>
           </div>
         </div>
