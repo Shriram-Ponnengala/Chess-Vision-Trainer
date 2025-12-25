@@ -32,9 +32,9 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     
     if (isTarget) {
       if (lastResult.success) {
-        return { backgroundColor: '#e6b17e', transition: 'background-color 0.15s ease-out' };
+        return { backgroundColor: '#e6b17e', transition: 'background-color 0.2s ease-out' };
       } else {
-        return { opacity: 0.6, transition: 'opacity 0.15s ease-out' }; 
+        return { opacity: 0.6, transition: 'opacity 0.2s ease-out' }; 
       }
     }
     return {};
@@ -43,7 +43,6 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   const getTargetPosition = (coord: Coordinate) => {
     const fileIdx = FILES.indexOf(coord.file);
     const rankIdx = RANKS.indexOf(coord.rank);
-    // Grid 0 to 7. Center of square is (index + 0.5) * 12.5%
     return {
       x: (fileIdx + 0.5) * 12.5,
       y: (rankIdx + 0.5) * 12.5,
@@ -51,12 +50,12 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-2 md:p-4 select-none w-full">
+    <div className="flex flex-col items-center justify-center p-4 md:p-6 select-none w-full animate-in fade-in zoom-in-98 duration-700">
       
       {/* Top Labels (Files) */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[520px] mb-1 md:mb-2 pl-6 md:pl-8 pr-1 md:pr-2">
+      <div className="flex w-full max-w-[90vw] md:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-12 pr-4 md:pr-6">
         {FILES.map((file) => (
-          <div key={file} className="flex-1 text-center font-bold text-brown/60 text-[10px] md:text-sm uppercase tracking-widest md:tracking-[0.25em] transition-opacity hover:opacity-100 cursor-default">
+          <div key={file} className="flex-1 text-center font-bold text-brown/30 text-[10px] md:text-xs uppercase tracking-[0.3em] transition-opacity hover:text-brown/60">
             {file}
           </div>
         ))}
@@ -64,16 +63,16 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
       <div className="flex items-center justify-center relative w-full">
         {/* Left Labels (Ranks) */}
-        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[520px] justify-between mr-1 md:mr-3 py-2 md:py-5">
+        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between mr-4 md:mr-6 py-4 md:py-8">
           {RANKS.map((rank) => (
-            <div key={rank} className="flex-1 flex items-center justify-center font-bold text-brown/60 text-[10px] md:text-sm opacity-80 hover:opacity-100 cursor-default w-4 md:w-6">
+            <div key={rank} className="flex-1 flex items-center justify-center font-bold text-brown/30 text-[10px] md:text-xs tracking-widest w-6 md:w-8 transition-opacity hover:text-brown/60">
               {rank}
             </div>
           ))}
         </div>
 
         {/* The Board Grid */}
-        <div className="w-[90vw] h-[90vw] md:w-[80vw] md:h-[80vw] max-w-[520px] max-h-[520px] grid grid-cols-8 shadow-2xl shadow-brown/30 border-4 md:border-[6px] border-brown rounded-xl overflow-hidden bg-brown relative ring-1 ring-white/10">
+        <div className="w-[90vw] h-[90vw] md:w-[80vw] md:h-[80vw] max-w-[540px] max-h-[540px] grid grid-cols-8 shadow-[0_32px_64px_-24px_rgba(85,30,25,0.4)] border-8 md:border-[12px] border-brown rounded-[2.5rem] overflow-hidden bg-brown relative">
           
           {/* Squares */}
           {RANKS.map((rank, rankIndex) => (
@@ -87,7 +86,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                     onClick={() => onSquareClick({ file, rank })}
                     className={`
                       relative flex items-center justify-center cursor-pointer 
-                      active:scale-95 transition-all duration-100 ease-out hover:brightness-95
+                      active:scale-95 transition-all duration-200 ease-out 
+                      hover:ring-[1.5px] hover:ring-inset hover:ring-gold/30
                       ${getSquareColor(fileIndex, rankIndex)}
                     `}
                     style={getFeedbackStyle(file, rank)}
@@ -101,7 +101,6 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
           {/* Overlay: Plane & Flight Path */}
           {activeTarget && (typeof planeProgress === 'number' || isLanding || isExploding) && (
             <>
-              {/* Flight Path Line - only show when landing (correct) or falling (normal) - hide on explosion */}
               {isLanding && !isExploding && (
                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
                   <line
@@ -110,21 +109,20 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                     x2={`${getTargetPosition(activeTarget).x}%`}
                     y2={`${getTargetPosition(activeTarget).y}%`}
                     stroke="#e6b17e"
-                    strokeWidth="3"
+                    strokeWidth="4"
                     strokeLinecap="round"
-                    className="opacity-90 drop-shadow-sm"
+                    className="opacity-90 drop-shadow-md"
                   />
                   <circle 
                     cx={`${getTargetPosition(activeTarget).x}%`}
                     cy={`${getTargetPosition(activeTarget).y}%`}
-                    r="4"
+                    r="6"
                     fill="#e6b17e"
-                    className="animate-ping opacity-75"
+                    className="animate-pulse"
                   />
                 </svg>
               )}
 
-              {/* The Plane */}
               <Plane 
                 target={activeTarget} 
                 progress={planeProgress} 
@@ -136,13 +134,10 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
         </div>
         
-         {/* Right Spacing Balance (Visual only, to center board against left labels) */}
-         <div className="w-4 md:w-6 ml-1 md:ml-3"></div>
+         <div className="w-6 md:w-8 ml-4 md:ml-6 invisible"></div>
       </div>
 
-      {/* Bottom Labels Placeholder for Balance */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[520px] mt-1 md:mt-2 pl-6 md:pl-8 pr-1 md:pr-2 h-4 md:h-6">
-      </div>
+      <div className="h-6 md:h-10"></div>
 
     </div>
   );

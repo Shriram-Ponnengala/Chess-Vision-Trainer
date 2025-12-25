@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
+import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX, Home } from 'lucide-react';
 import { GameState, Coordinate, GameStats, MoveHistory, Difficulty } from './types';
 import { MAIN_DURATION, getRandomCoordinate, coordinateToString, DIFFICULTY_SETTINGS } from './constants';
 import ChessBoard from './components/ChessBoard';
@@ -33,42 +32,73 @@ const App: React.FC = () => {
   const [isLanding, setIsLanding] = useState(false);
   const [isExploding, setIsExploding] = useState(false);
 
-  // Refs for loops
-  const requestRef = useRef<number>();
+  // Refs for loops and audio
+  const requestRef = useRef<number>(undefined);
   const spawnTimeRef = useRef<number>(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const soundBuffers = useRef<{ correct: AudioBuffer | null; wrong: AudioBuffer | null }>({
+    correct: null,
+    wrong: null,
+  });
 
-  // --- Sound Logic ---
+  // --- Sound Initialization (Preload once and reuse) ---
+  useEffect(() => {
+    const initAudio = () => {
+      if (soundBuffers.current.correct) return; 
+
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const ctx = new AudioContextClass();
+      audioContextRef.current = ctx;
+
+      const createBuffer = (duration: number, synthesizer: (t: number) => number) => {
+        const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = synthesizer(i / ctx.sampleRate);
+        }
+        return buffer;
+      };
+
+      // Correct: Soft chime (A5), <= 150ms
+      soundBuffers.current.correct = createBuffer(0.14, (t) => {
+        const freq = 880; 
+        const decay = Math.exp(-t * 30);
+        return Math.sin(2 * Math.PI * freq * t) * 0.04 * decay;
+      });
+
+      // Wrong: Muffled thud/pop, ~250ms
+      soundBuffers.current.wrong = createBuffer(0.25, (t) => {
+        const freq = 110 * Math.exp(-t * 12); 
+        const decay = Math.exp(-t * 15);
+        // Blend triangle for soft thud body
+        const tri = (Math.abs((t * freq % 1) - 0.5) * 4 - 1);
+        return tri * 0.08 * decay;
+      });
+    };
+
+    window.addEventListener('mousedown', initAudio, { once: true });
+    window.addEventListener('touchstart', initAudio, { once: true });
+    return () => {
+      window.removeEventListener('mousedown', initAudio);
+      window.removeEventListener('touchstart', initAudio);
+    };
+  }, []);
+
   const playSound = useCallback((type: 'correct' | 'wrong') => {
-    if (isMuted) return;
+    if (isMuted || !audioContextRef.current) return;
+    
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
 
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
+    const buffer = soundBuffers.current[type];
+    if (!buffer) return;
 
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      if (type === 'correct') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } else {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(150, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.25);
-        gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      }
-    } catch (e) {}
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start();
   }, [isMuted]);
 
   // --- Game Loop Logic ---
@@ -98,7 +128,6 @@ const App: React.FC = () => {
       }]);
     }
 
-    // Spawn after difficulty-based delay
     setTimeout(() => {
       if (gameState === GameState.MAIN_PLAY) spawnPlane();
     }, DIFFICULTY_SETTINGS[difficulty].spawnDelay);
@@ -236,56 +265,56 @@ const App: React.FC = () => {
     
     return (
       <div className="w-full fixed top-0 left-0 right-0 z-40 flex flex-col items-center pointer-events-none">
-         <div className="w-full bg-brown/95 backdrop-blur-md text-cream shadow-xl border-b border-white/10 py-2 md:pt-4 md:pb-3 px-3 md:px-6 pointer-events-auto transition-all duration-300">
-            <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
+         <div className="w-full bg-brown text-cream shadow-xl border-b border-white/5 py-3 md:py-4 px-4 md:px-8 pointer-events-auto transition-all duration-300">
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
               
-              <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
-                 <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Score</span>
-                 <span className="text-xl md:text-3xl font-black leading-none text-white tracking-tight drop-shadow-sm tabular-nums">{stats.score}</span>
+              <div className="flex flex-col items-center min-w-[70px] md:min-w-[90px]">
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-1">Score</span>
+                 <span className="text-2xl md:text-3xl font-bold leading-none text-white tracking-tight tabular-nums">{stats.score}</span>
               </div>
 
-              <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
-                 <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Streak</span>
-                 <div className="flex items-center gap-1 md:gap-1.5">
-                    <Zap size={16} className={`md:w-[18px] md:h-[18px] ${stats.streak > 2 ? 'fill-gold text-gold animate-pulse' : 'text-white/20'}`} />
-                    <span className="text-xl md:text-3xl font-black leading-none text-white tracking-tight drop-shadow-sm tabular-nums">{stats.streak}</span>
+              <div className="flex flex-col items-center min-w-[70px] md:min-w-[90px]">
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-1">Streak</span>
+                 <div className="flex items-center gap-1.5 md:gap-2">
+                    <Zap size={18} className={`md:w-5 md:h-5 ${stats.streak > 2 ? 'fill-gold text-gold animate-pulse' : 'text-white/20'}`} />
+                    <span className="text-2xl md:text-3xl font-bold leading-none text-white tracking-tight tabular-nums">{stats.streak}</span>
                  </div>
               </div>
 
-              <div className="flex flex-col items-center min-w-[60px] md:min-w-[80px]">
-                 <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5">Time</span>
-                 <span className={`text-xl md:text-3xl font-black leading-none tabular-nums tracking-tight drop-shadow-sm transition-colors duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse' : 'text-white'}`}>
+              <div className="flex flex-col items-center min-w-[70px] md:min-w-[90px]">
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-1">Time</span>
+                 <span className={`text-2xl md:text-3xl font-bold leading-none tabular-nums tracking-tight transition-colors duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse' : 'text-white'}`}>
                    {timeLeft}
                  </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsMuted(!isMuted)}
-                  className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
+                  className="group w-10 h-10 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10"
                   aria-label={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? (
-                    <VolumeX size={18} className="md:w-5 md:h-5 text-white/50 group-hover:text-gold transition-colors" />
+                    <VolumeX size={18} className="text-white/40 group-hover:text-gold transition-colors" />
                   ) : (
-                    <Volume2 size={18} className="md:w-5 md:h-5 text-white group-hover:text-gold transition-colors" />
+                    <Volume2 size={18} className="text-white group-hover:text-gold transition-colors" />
                   )}
                 </button>
 
                 <button 
                   onClick={() => setIsPaused(!isPaused)}
-                  className="group w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10 hover:border-gold/30 shadow-sm"
+                  className="group w-10 h-10 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all duration-200 border border-white/10"
                   aria-label={isPaused ? "Resume" : "Pause"}
                 >
-                  {isPaused ? <Play size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" /> : <Pause size={18} className="md:w-5 md:h-5 fill-white text-white group-hover:text-gold transition-colors" />}
+                  {isPaused ? <Play size={18} className="fill-white text-white group-hover:text-gold transition-colors" /> : <Pause size={18} className="fill-white text-white group-hover:text-gold transition-colors" />}
                 </button>
               </div>
             </div>
          </div>
          
-         <div className="w-full h-1 md:h-1.5 bg-brown/50">
+         <div className="w-full h-1 bg-brown">
             <div 
-              className="h-full bg-gradient-to-r from-gold to-[#f0cfa5] shadow-[0_0_10px_rgba(230,177,126,0.5)] transition-all duration-1000 ease-linear rounded-r-full"
+              className="h-full bg-gold transition-all duration-1000 ease-linear rounded-r-full"
               style={{ width: `${timePercent}%` }}
             />
          </div>
@@ -296,12 +325,12 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center relative font-sans bg-cream overflow-hidden">
       
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gold rounded-full opacity-10 pointer-events-none blur-[100px] animate-pulse"></div>
-      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-cream via-cream to-[#edcbb0] opacity-50 pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-5 pointer-events-none blur-[120px]"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-cream via-cream to-[#f2cfaf] opacity-40 pointer-events-none"></div>
 
       {gameState === GameState.MAIN_PLAY && renderHUD()}
 
-      <div className="relative z-10 mt-[5.5rem] md:mt-24 flex-1 flex flex-col justify-center w-full max-w-[600px] px-2 md:px-4">
+      <div className="relative z-10 mt-28 md:mt-32 flex-1 flex flex-col justify-center w-full max-w-[620px] px-4">
         <ChessBoard 
           onSquareClick={handleSquareClick}
           activeTarget={activeTarget}
@@ -313,29 +342,34 @@ const App: React.FC = () => {
       </div>
 
       {gameState === GameState.MENU && (
-        <div className="absolute inset-0 bg-cream/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in duration-300">
-          <div className="bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl shadow-brown/10 border border-white max-w-lg w-full mx-4 transform transition-all hover:scale-[1.005]">
-            <div className="w-16 h-16 md:w-20 md:h-20 bg-brown rounded-2xl mx-auto mb-6 md:mb-8 flex items-center justify-center shadow-lg shadow-brown/20 rotate-3 hover:rotate-6 transition-transform duration-300">
-               <PlaneIcon size={32} className="md:w-[40px] md:h-[40px] text-white" />
+        <div className="absolute inset-0 bg-cream/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-white p-10 md:p-14 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(85,30,25,0.15)] border border-white max-w-lg w-full transform transition-all">
+            
+            <button 
+              onClick={() => setIsMuted(!isMuted)}
+              className="absolute top-8 right-8 w-11 h-11 rounded-2xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-200 border border-brown/5"
+            >
+              {isMuted ? <VolumeX size={20} className="text-brown/30" /> : <Volume2 size={20} className="text-brown/60" />}
+            </button>
+
+            <div className="w-20 h-20 bg-brown rounded-2xl mx-auto mb-8 flex items-center justify-center shadow-xl shadow-brown/20 -rotate-2 hover:rotate-0 transition-transform duration-500">
+               <PlaneIcon size={40} className="text-white" />
             </div>
             
-            <h1 className="text-3xl md:text-4xl font-black text-brown mb-2 tracking-tight">Plane to E4</h1>
-            <p className="text-brown/60 mb-6 md:mb-8 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em]">Learn Chess Coordinates at Jet Speed!</p>
+            <h1 className="text-4xl md:text-5xl font-bold text-brown mb-3 tracking-tight">Plane to E4</h1>
+            <p className="text-brown/40 mb-10 font-bold text-xs uppercase tracking-[0.3em] leading-relaxed">Advanced Coordinate Mastery</p>
             
-            {/* Difficulty Selection */}
-            <div className="mb-8">
-              <h3 className="font-bold text-brown/90 text-[10px] uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
-                Select Difficulty
-              </h3>
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-brown/5 rounded-2xl border border-brown/5">
+            <div className="mb-10">
+              <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-4">Choose Intensity</h3>
+              <div className="grid grid-cols-3 gap-3 p-2 bg-brown/5 rounded-[1.5rem] border border-brown/5">
                 {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
                   <button
                     key={d}
                     onClick={() => setDifficulty(d)}
-                    className={`py-2.5 rounded-xl font-bold text-xs uppercase transition-all duration-200 ${
+                    className={`py-3 rounded-xl font-bold text-xs uppercase transition-all duration-300 ${
                       difficulty === d 
                         ? 'bg-brown text-gold shadow-lg shadow-brown/20' 
-                        : 'text-brown/40 hover:text-brown/60'
+                        : 'text-brown/40 hover:text-brown/70 hover:bg-brown/5'
                     }`}
                   >
                     {d}
@@ -344,110 +378,120 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-left bg-cream/20 p-4 md:p-6 rounded-2xl mb-6 md:mb-8 border border-brown/5">
-                <h3 className="font-bold text-brown/90 text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gold"></span> 
-                  How to Play
+            <div className="text-left bg-cream/30 p-8 rounded-3xl mb-10 border border-brown/5">
+                <h3 className="font-bold text-brown/90 text-xs uppercase tracking-widest mb-5 flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-gold"></div> 
+                  Program Overview
                 </h3>
-                <ul className="text-xs md:text-sm text-brown/70 space-y-2 md:space-y-2.5 list-none font-medium pl-1">
-                    <li className="flex items-start gap-2 md:gap-3">
-                      <span className="text-gold font-bold">•</span>
-                      Land planes by clicking the matching square
+                <ul className="text-sm text-brown/70 space-y-4 font-medium">
+                    <li className="flex items-center gap-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                      Identify coordinates with 100% precision
                     </li>
-                    <li className="flex items-start gap-2 md:gap-3">
-                      <span className="text-gold font-bold">•</span>
-                      Speed increases over 60 seconds
+                    <li className="flex items-center gap-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                      Adaptive speed over 60-second intervals
                     </li>
-                    <li className="flex items-start gap-2 md:gap-3">
-                      <span className="text-gold font-bold">•</span>
-                      Maintain streaks for massive bonus points
+                    <li className="flex items-center gap-4">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gold/50"></span>
+                      AI-driven performance analysis
                     </li>
                 </ul>
             </div>
 
             <button 
               onClick={startGame}
-              className="group w-full bg-brown text-white font-bold text-base md:text-lg py-4 md:py-5 rounded-2xl shadow-xl shadow-brown/20 hover:shadow-brown/40 hover:bg-[#4a1915] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 border border-transparent hover:border-gold/10"
+              className="group w-full bg-brown text-white font-bold text-lg py-5 rounded-2xl shadow-2xl shadow-brown/20 hover:bg-[#4a1915] active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-3"
             >
-              <Play size={20} className="md:w-[22px] md:h-[22px] fill-current group-hover:scale-110 transition-transform" /> START MISSION
+              <Play size={22} className="fill-current group-hover:scale-110 transition-transform" /> COMMENCE TRAINING
             </button>
           </div>
         </div>
       )}
 
       {gameState === GameState.SUMMARY && (
-        <div className="absolute inset-0 bg-brown/95 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in zoom-in-95 duration-300">
-          <div className="bg-cream text-brown p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl max-w-md w-full mx-4 border border-gold/30 relative">
-            <div className="absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 bg-gold text-brown px-6 md:px-8 py-2 md:py-3 rounded-full font-black uppercase tracking-[0.2em] text-[10px] md:text-xs shadow-xl border-4 border-brown whitespace-nowrap">
-              Run Complete
+        <div className="absolute inset-0 bg-brown/98 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in duration-500">
+          <div className="bg-cream text-brown p-10 md:p-14 rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-xl w-full mx-4 border border-white/10 relative">
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gold text-brown px-10 py-4 rounded-full font-bold uppercase tracking-[0.3em] text-xs shadow-2xl border-[6px] border-brown">
+              Run Summary
             </div>
             
-            <div className="mt-6 md:mt-8 grid grid-cols-2 gap-3 md:gap-5 mb-4 md:mb-5">
-              <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-brown/5 text-center group hover:shadow-md transition-shadow">
-                <div className="text-[9px] md:text-[10px] uppercase font-bold text-brown/40 mb-1 md:mb-2 tracking-wider">Score</div>
-                <div className="text-3xl md:text-4xl font-black text-brown tracking-tighter group-hover:scale-110 transition-transform duration-300">{stats.score}</div>
+            <div className="mt-10 grid grid-cols-2 gap-6 mb-8">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-brown/5 text-center group transition-all hover:border-gold/30">
+                <div className="text-[10px] uppercase font-bold text-brown/40 mb-3 tracking-widest">Final Score</div>
+                <div className="text-5xl font-bold text-brown tracking-tighter">{stats.score}</div>
               </div>
-              <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-brown/5 text-center group hover:shadow-md transition-shadow">
-                <div className="text-[9px] md:text-[10px] uppercase font-bold text-brown/40 mb-1 md:mb-2 tracking-wider">Accuracy</div>
-                <div className="text-3xl md:text-4xl font-black text-brown tracking-tighter group-hover:scale-110 transition-transform duration-300">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-gold/40 text-center group transition-all ring-1 ring-gold/10">
+                <div className="text-[10px] uppercase font-bold text-gold/80 mb-3 tracking-widest">Accuracy</div>
+                <div className="text-5xl font-bold text-brown tracking-tighter">
                   {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
                 </div>
               </div>
             </div>
 
-            <div className="text-center mb-6 md:mb-8">
-               <div className="text-[10px] uppercase font-bold text-brown/40 tracking-wider">Accuracy Index</div>
-               <div className="text-xl font-black text-brown leading-none my-1">
+            <div className="text-center bg-white/40 p-8 rounded-[2rem] mb-8 border border-white/60">
+               <div className="text-[10px] uppercase font-bold text-brown/40 tracking-[0.2em] mb-2">Accuracy Index</div>
+               <div className="text-3xl font-bold text-brown leading-none my-2">
                   {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
                </div>
-               <div className="text-[9px] text-brown/50">Tracks board-coordinate accuracy per run.</div>
+               <p className="text-[11px] text-brown/50 leading-relaxed max-w-[200px] mx-auto">Board-coordinate accuracy metric tracked over current run duration.</p>
                {lastRunAccuracy !== null && (
-                  <div className="text-[9px] text-brown/60 font-bold mt-1">Last Run: {lastRunAccuracy}%</div>
+                  <div className="text-[11px] text-brown/70 font-bold mt-4 px-4 py-1.5 bg-brown/5 rounded-full inline-block">Previous Session: {lastRunAccuracy}%</div>
                )}
             </div>
 
-            <div className="bg-white/60 rounded-2xl p-5 md:p-6 mb-6 md:mb-8 border border-white/50 shadow-inner">
-              <h3 className="flex items-center gap-2 font-bold mb-3 text-brown text-xs uppercase tracking-widest opacity-80">
-                <CheckCircle2 size={16} className="text-gold" />
-                Coach's Feedback
+            <div className="bg-white/80 rounded-[2.5rem] p-8 mb-10 border border-white shadow-sm">
+              <h3 className="flex items-center gap-3 font-bold mb-5 text-brown/90 text-[10px] uppercase tracking-widest">
+                <CheckCircle2 size={18} className="text-gold" />
+                Coach Analysis
               </h3>
               {isLoadingFeedback ? (
-                <div className="flex flex-col items-center py-6 space-y-4 opacity-50">
-                  <div className="w-8 h-8 border-[3px] border-brown/20 border-t-brown rounded-full animate-spin"></div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-brown/60">Analyzing Performance...</span>
+                <div className="flex flex-col items-center py-10 space-y-5 opacity-40">
+                  <div className="w-10 h-10 border-[4px] border-brown/10 border-t-brown rounded-full animate-spin"></div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Processing Session Data</span>
                 </div>
               ) : (
-                <p className="text-xs md:text-sm leading-relaxed text-brown font-medium opacity-90">{coachFeedback}</p>
+                <p className="text-sm md:text-base leading-relaxed text-brown/80 font-medium italic">"{coachFeedback}"</p>
               )}
             </div>
 
             <button 
               onClick={() => setGameState(GameState.MENU)}
-              className="w-full bg-brown text-gold font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-2 hover:bg-[#4a1915] active:scale-[0.98] transition-all duration-200 shadow-xl shadow-brown/20 border border-gold/10 text-sm md:text-base"
+              className="w-full bg-brown text-gold font-bold py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#431814] transition-all duration-300 shadow-xl shadow-brown/40 text-base"
             >
-              <RotateCcw size={16} className="md:w-[18px] md:h-[18px]" /> RETURN TO MENU
+              <RotateCcw size={18} /> BACK TO OPERATIONS
             </button>
           </div>
         </div>
       )}
       
       {isPaused && (
-        <div className="absolute inset-0 bg-brown/80 backdrop-blur-md z-50 flex items-center justify-center animate-in fade-in duration-200 p-4">
-          <div className="bg-white p-8 md:p-10 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex flex-col items-center w-[90%] max-w-[320px] border border-white/20">
-             <span className="font-black text-xl md:text-2xl text-brown mb-8 md:mb-10 tracking-[0.2em] uppercase opacity-90 text-center">Paused</span>
+        <div className="absolute inset-0 bg-brown/90 backdrop-blur-xl z-50 flex items-center justify-center animate-in fade-in duration-300 p-6">
+          <div className="bg-white p-12 rounded-[3rem] shadow-2xl flex flex-col items-center w-full max-w-sm border border-white/20">
+             <span className="font-bold text-2xl text-brown mb-12 tracking-[0.3em] uppercase opacity-90">Paused</span>
              
              <button 
                 onClick={() => setIsPaused(false)}
-                className="w-full bg-gold text-brown font-black py-4 md:py-5 px-6 md:px-8 rounded-2xl hover:bg-[#eecfa5] active:scale-[0.98] transition-all duration-200 mb-4 flex items-center justify-center gap-3 shadow-lg shadow-gold/30 text-sm md:text-base"
+                className="w-full bg-gold text-brown font-bold py-5 rounded-2xl hover:bg-[#eccfa5] transition-all duration-200 mb-5 flex items-center justify-center gap-3 shadow-lg shadow-gold/20"
              >
-               <Play size={20} className="md:w-[22px] md:h-[22px] fill-current" /> RESUME
+               <Play size={22} className="fill-current" /> RESUME MISSION
              </button>
 
              <button 
                 onClick={startGame}
-                className="w-full bg-brown text-cream font-bold py-4 md:py-5 px-6 md:px-8 rounded-2xl hover:bg-[#4a1915] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 shadow-lg shadow-brown/30 text-sm md:text-base"
+                className="w-full bg-brown text-cream font-bold py-5 rounded-2xl hover:bg-[#4a1915] transition-all duration-200 mb-5 flex items-center justify-center gap-3 shadow-xl shadow-brown/20"
              >
-               <RotateCcw size={18} className="md:w-[20px] md:h-[20px]" /> RESTART
+               <RotateCcw size={20} /> RESTART SESSION
+             </button>
+
+             <button 
+                onClick={() => {
+                  setGameState(GameState.MENU);
+                  setIsPaused(false);
+                }}
+                className="w-full bg-cream text-brown font-bold py-5 rounded-2xl hover:brightness-95 transition-all duration-200 flex items-center justify-center gap-3 border border-brown/5 text-base"
+             >
+               <Home size={18} /> HOME SCREEN
              </button>
           </div>
         </div>
