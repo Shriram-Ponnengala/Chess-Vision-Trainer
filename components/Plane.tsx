@@ -43,11 +43,17 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExplodin
       >
         <div 
           className="relative z-10"
-          style={{ filter: 'drop-shadow(0px 8px 16px rgba(0,0,0,0.25))' }}
+          style={{ filter: 'drop-shadow(0px 10px 14px rgba(85,30,25,0.2))' }}
         >
            <PlaneIcon 
-             className="w-16 h-16 text-white fill-white"
-             style={{ transform: 'rotate(135deg)', transformOrigin: 'center' }}
+             className="w-16 h-16"
+             style={{ 
+               transform: 'rotate(135deg)', 
+               transformOrigin: 'center',
+               fill: '#fffdfa',
+               stroke: '#e6b17e',
+               strokeWidth: '1px'
+             }}
            />
         </div>
 
