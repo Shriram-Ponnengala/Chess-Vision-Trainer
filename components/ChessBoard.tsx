@@ -53,7 +53,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     <div className="flex flex-col items-center justify-center p-4 md:p-6 select-none w-full animate-in fade-in zoom-in-98 duration-700">
       
       {/* Top Labels (Files) */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-12 pr-4 md:pr-6">
+      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-12 pr-0">
         {FILES.map((file) => (
           <div key={file} className="flex-1 text-center font-bold text-brown/30 text-[10px] md:text-xs uppercase tracking-[0.3em] transition-opacity hover:text-brown/60">
             {file}
@@ -72,7 +72,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
 
         {/* The Board Grid */}
-        <div className="w-[90vw] h-[90vw] md:w-[80vw] md:h-[80vw] max-w-[540px] max-h-[540px] grid grid-cols-8 shadow-[0_32px_64px_-24px_rgba(85,30,25,0.4)] border-8 md:border-[12px] border-brown rounded-[2.5rem] overflow-hidden bg-brown relative">
+        <div className="w-[90vw] md:w-[80vw] max-w-[540px] aspect-square grid grid-cols-8 shadow-[0_32px_64px_-24px_rgba(85,30,25,0.4)] border-8 md:border-[12px] border-brown rounded-[2.5rem] overflow-hidden bg-brown relative shrink-0">
           
           {/* Squares */}
           {RANKS.map((rank, rankIndex) => (
