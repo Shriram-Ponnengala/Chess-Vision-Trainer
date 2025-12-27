@@ -411,56 +411,38 @@ const App: React.FC = () => {
 
       {gameState === GameState.SUMMARY && (
         <div className="absolute inset-0 bg-brown/98 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in duration-500">
-          <div className="bg-cream text-brown p-10 md:p-14 rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-xl w-full mx-4 border border-white/10 relative">
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gold text-brown px-10 py-4 rounded-full font-bold uppercase tracking-[0.3em] text-xs shadow-2xl border-[6px] border-brown">
-              Run Summary
+          <div className="bg-cream text-brown p-10 md:p-14 rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-sm w-full mx-4 border border-white/10 relative text-center">
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gold text-brown px-10 py-4 rounded-full font-bold uppercase tracking-[0.3em] text-xs shadow-2xl border-[6px] border-brown whitespace-nowrap">
+              Session Complete
             </div>
             
-            <div className="mt-10 grid grid-cols-2 gap-6 mb-8">
-              <div className="bg-white p-8 rounded-3xl shadow-sm border border-brown/5 text-center group transition-all hover:border-gold/30">
-                <div className="text-[10px] uppercase font-bold text-brown/40 mb-3 tracking-widest">Final Score</div>
-                <div className="text-5xl font-bold text-brown tracking-tighter">{stats.score}</div>
+            <div className="mt-12 mb-10 flex flex-col items-center">
+              <div className="text-[10px] uppercase font-bold text-brown/40 mb-3 tracking-[0.2em]">Training Accuracy</div>
+              <div className="text-7xl md:text-8xl font-bold text-brown tracking-tighter mb-4">
+                {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
               </div>
-              <div className="bg-white p-8 rounded-3xl shadow-sm border border-gold/40 text-center group transition-all ring-1 ring-gold/10">
-                <div className="text-[10px] uppercase font-bold text-gold/80 mb-3 tracking-widest">Accuracy</div>
-                <div className="text-5xl font-bold text-brown tracking-tighter">
-                  {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
-                </div>
+              <div className="text-sm font-bold text-brown/60 uppercase tracking-[0.1em]">
+                Total Score: <span className="text-brown">{stats.score}</span>
               </div>
-            </div>
-
-            <div className="text-center bg-white/40 p-8 rounded-[2rem] mb-8 border border-white/60">
-               <div className="text-[10px] uppercase font-bold text-brown/40 tracking-[0.2em] mb-2">Accuracy Index</div>
-               <div className="text-3xl font-bold text-brown leading-none my-2">
-                  {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
-               </div>
-               <p className="text-[11px] text-brown/50 leading-relaxed max-w-[200px] mx-auto">Board-coordinate accuracy metric tracked over current run duration.</p>
-               {lastRunAccuracy !== null && (
-                  <div className="text-[11px] text-brown/70 font-bold mt-4 px-4 py-1.5 bg-brown/5 rounded-full inline-block">Previous Session: {lastRunAccuracy}%</div>
-               )}
-            </div>
-
-            <div className="bg-white/80 rounded-[2.5rem] p-8 mb-10 border border-white shadow-sm">
-              <h3 className="flex items-center gap-3 font-bold mb-5 text-brown/90 text-[10px] uppercase tracking-widest">
-                <CheckCircle2 size={18} className="text-gold" />
-                Coach Analysis
-              </h3>
-              {isLoadingFeedback ? (
-                <div className="flex flex-col items-center py-10 space-y-5 opacity-40">
-                  <div className="w-10 h-10 border-[4px] border-brown/10 border-t-brown rounded-full animate-spin"></div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Processing Session Data</span>
-                </div>
-              ) : (
-                <p className="text-sm md:text-base leading-relaxed text-brown/80 font-medium italic">"{coachFeedback}"</p>
+              {lastRunAccuracy !== null && (
+                <div className="text-[10px] text-brown/40 font-bold mt-4 px-4 py-1.5 bg-brown/5 rounded-full inline-block">Previous: {lastRunAccuracy}%</div>
               )}
             </div>
 
-            <button 
-              onClick={() => setGameState(GameState.MENU)}
-              className="w-full bg-brown text-gold font-bold py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#431814] transition-all duration-300 shadow-xl shadow-brown/40 text-base"
-            >
-              <RotateCcw size={18} /> BACK TO OPERATIONS
-            </button>
+            <div className="space-y-4">
+              <button 
+                onClick={startGame}
+                className="w-full bg-brown text-gold font-bold py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#431814] transition-all duration-300 shadow-xl shadow-brown/40 text-base"
+              >
+                <RotateCcw size={18} /> PLAY AGAIN
+              </button>
+              <button 
+                onClick={() => setGameState(GameState.MENU)}
+                className="w-full bg-cream text-brown font-bold py-5 rounded-2xl flex items-center justify-center gap-3 hover:brightness-95 transition-all duration-300 border border-brown/5 text-base"
+              >
+                <Home size={18} /> RETURN TO HOME
+              </button>
+            </div>
           </div>
         </div>
       )}
