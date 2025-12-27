@@ -325,7 +325,31 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center relative font-sans bg-cream overflow-hidden">
       
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-5 pointer-events-none blur-[120px]"></div>
+      {/* Background Enhancements */}
+      
+      {/* Ghost Chessboard Texture */}
+      <div 
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${gameState === GameState.MAIN_PLAY ? 'opacity-0' : 'opacity-100'}`}
+        style={{
+          backgroundImage: `conic-gradient(#551e19 90deg, transparent 90deg 180deg, #551e19 180deg 270deg, transparent 270deg)`,
+          backgroundSize: '400px 400px',
+          opacity: 0.02
+        }}
+      />
+
+      {/* Parchment / Paper Grain Texture Overlay */}
+      <div 
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${gameState === GameState.MAIN_PLAY ? 'opacity-0' : 'opacity-100'}`}
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          opacity: 0.015,
+        }}
+      />
+      
+      {/* Warm Radial Glow anchor */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-[0.08] pointer-events-none blur-[120px]"></div>
+      
+      {/* Subtle Vertical Gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-cream via-cream to-[#f2cfaf] opacity-40 pointer-events-none"></div>
 
       {gameState === GameState.MAIN_PLAY && renderHUD()}

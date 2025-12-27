@@ -49,13 +49,16 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     };
   };
 
+  const labelClasses = "flex-1 text-center font-bold text-brown/40 text-[10px] md:text-xs uppercase tracking-[0.2em]";
+  const rankLabelClasses = "flex-1 flex items-center justify-center font-bold text-brown/40 text-[10px] md:text-xs tracking-widest w-6 md:w-8";
+
   return (
     <div className="flex flex-col items-center justify-center p-4 md:p-6 select-none w-full animate-in fade-in zoom-in-98 duration-700">
       
       {/* Top Labels (Files) */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-12 pr-0">
+      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-14 pr-10 md:pr-14">
         {FILES.map((file) => (
-          <div key={file} className="flex-1 text-center font-bold text-brown/30 text-[10px] md:text-xs uppercase tracking-[0.3em] transition-opacity hover:text-brown/60">
+          <div key={`top-${file}`} className={labelClasses}>
             {file}
           </div>
         ))}
@@ -63,9 +66,9 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
       <div className="flex items-center justify-center relative w-full">
         {/* Left Labels (Ranks) */}
-        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between mr-4 md:mr-6 py-4 md:py-8">
+        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between mr-4 md:mr-6 py-2 md:py-4">
           {RANKS.map((rank) => (
-            <div key={rank} className="flex-1 flex items-center justify-center font-bold text-brown/30 text-[10px] md:text-xs tracking-widest w-6 md:w-8 transition-opacity hover:text-brown/60">
+            <div key={`left-${rank}`} className={rankLabelClasses}>
               {rank}
             </div>
           ))}
@@ -134,7 +137,23 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
         </div>
         
-         <div className="w-6 md:w-8 ml-4 md:ml-6 invisible"></div>
+        {/* Right Labels (Ranks) */}
+        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between ml-4 md:ml-6 py-2 md:py-4">
+          {RANKS.map((rank) => (
+            <div key={`right-${rank}`} className={rankLabelClasses}>
+              {rank}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom Labels (Files) */}
+      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mt-3 md:mt-5 pl-10 md:pl-14 pr-10 md:pr-14">
+        {FILES.map((file) => (
+          <div key={`bottom-${file}`} className={labelClasses}>
+            {file}
+          </div>
+        ))}
       </div>
 
       <div className="h-6 md:h-10"></div>
