@@ -427,7 +427,7 @@ const App: React.FC = () => {
               onClick={startGame}
               className="group w-full bg-brown text-white font-bold text-base py-4 rounded-xl shadow-xl shadow-brown/20 hover:bg-[#4a1915] active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2"
             >
-              <Play size={20} className="fill-current group-hover:scale-110 transition-transform" /> COMMENCE TRAINING
+              <Play size={20} className="fill-current group-hover:scale-110 transition-transform" /> START PLAYING
             </button>
           </div>
         </div>
