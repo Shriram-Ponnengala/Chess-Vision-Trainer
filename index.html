@@ -22,6 +22,7 @@
               'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
               'pulse-gold': 'pulse-gold 2s infinite',
               'float': 'float 3s ease-in-out infinite',
+              'scale-in': 'scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
             },
             keyframes: {
               shake: {
@@ -37,6 +38,10 @@
               float: {
                 '0%, 100%': { transform: 'translateY(0)' },
                 '50%': { transform: 'translateY(-5px)' },
+              },
+              'scale-in': {
+                '0%': { transform: 'scale(0.8)', opacity: '0' },
+                '100%': { transform: 'scale(1)', opacity: '1' }
               }
             }
           },
@@ -77,9 +82,7 @@
 }
 </script>
 </head>
-  <body class="bg-cream text-brown h-screen w-screen overflow-hidden selection:bg-gold selection:text-brown font-sans flex items-center justify-center">
+  <body class="bg-cream text-brown h-[100dvh] w-screen overflow-hidden selection:bg-gold selection:text-brown font-sans flex items-center justify-center">
     <div id="root" class="w-full h-full"></div>
-    <script type="module" src="/index.tsx"></script>
-    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

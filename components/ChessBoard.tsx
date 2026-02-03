@@ -32,7 +32,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     
     if (isTarget) {
       if (lastResult.success) {
-        return { backgroundColor: '#e6b17e', transition: 'background-color 0.2s ease-out' };
+        return { backgroundColor: '#e6b17e', transition: 'background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1)' };
       } else {
         return { opacity: 0.6, transition: 'opacity 0.2s ease-out' }; 
       }
@@ -49,24 +49,36 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     };
   };
 
-  const labelClasses = "flex-1 text-center font-bold text-brown/40 text-[10px] md:text-xs uppercase tracking-[0.2em]";
-  const rankLabelClasses = "flex-1 flex items-center justify-center font-bold text-brown/40 text-[10px] md:text-xs tracking-widest w-6 md:w-8";
+  // Optimized visibility for mobile
+  const labelClasses = "flex-1 text-center font-extrabold text-brown/90 text-[10px] md:text-sm uppercase tracking-wider";
+  const rankLabelClasses = "flex items-center justify-center font-extrabold text-brown/90 text-[10px] md:text-sm tracking-wider w-5 md:w-8";
+  
+  // Layout constants
+  const sideLabelWidth = "w-5 md:w-8"; 
+  const gapSize = "gap-1 md:gap-3"; 
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 md:p-6 select-none w-full animate-in fade-in zoom-in-98 duration-700">
+    // Responsive container using min() logic for constraints to fit landscape/portrait mobile
+    <div className="flex flex-col items-center justify-center w-full max-w-[min(90vw,60vh)] md:max-w-[540px] animate-in fade-in zoom-in-98 duration-700">
       
-      {/* Top Labels (Files) */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mb-3 md:mb-5 pl-10 md:pl-14 pr-10 md:pr-14">
-        {FILES.map((file) => (
-          <div key={`top-${file}`} className={labelClasses}>
-            {file}
-          </div>
-        ))}
+      {/* Top Section: Spacer + Files + Spacer */}
+      <div className={`flex items-end justify-center w-full mb-1 md:mb-2 ${gapSize}`}>
+         <div className={`${sideLabelWidth} shrink-0`} />
+         <div className="flex-1 flex px-1 md:px-[12px] shrink-0">
+            {FILES.map((file) => (
+              <div key={`top-${file}`} className={labelClasses}>
+                {file}
+              </div>
+            ))}
+         </div>
+         <div className={`${sideLabelWidth} shrink-0`} />
       </div>
 
-      <div className="flex items-center justify-center relative w-full">
-        {/* Left Labels (Ranks) */}
-        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between mr-4 md:mr-6 py-2 md:py-4">
+      {/* Middle Section: Ranks + Board + Ranks */}
+      <div className={`flex items-stretch justify-center w-full ${gapSize}`}>
+        
+        {/* Left Ranks */}
+        <div className={`grid grid-rows-8 py-1 md:py-[12px] ${sideLabelWidth} shrink-0`}>
           {RANKS.map((rank) => (
             <div key={`left-${rank}`} className={rankLabelClasses}>
               {rank}
@@ -75,22 +87,19 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
 
         {/* The Board Grid */}
-        <div className="w-[90vw] md:w-[80vw] max-w-[540px] aspect-square grid grid-cols-8 shadow-[0_32px_64px_-24px_rgba(85,30,25,0.4)] border-8 md:border-[12px] border-brown rounded-[2.5rem] overflow-hidden bg-brown relative shrink-0">
+        <div className="flex-1 aspect-square grid grid-cols-8 shadow-[0_24px_48px_-12px_rgba(85,30,25,0.5)] border-4 md:border-[12px] border-brown rounded-[1rem] md:rounded-[2.5rem] overflow-hidden bg-brown relative shrink-0">
           
-          {/* Squares */}
           {RANKS.map((rank, rankIndex) => (
             <React.Fragment key={rank}>
               {FILES.map((file, fileIndex) => {
                 const coordString = `${file}${rank}`;
-                
                 return (
                   <div
                     key={coordString}
                     onClick={() => onSquareClick({ file, rank })}
                     className={`
                       relative flex items-center justify-center cursor-pointer 
-                      active:scale-95 transition-all duration-200 ease-out 
-                      hover:ring-[1.5px] hover:ring-inset hover:ring-gold/30
+                      active:scale-95 transition-all duration-150 ease-out 
                       ${getSquareColor(fileIndex, rankIndex)}
                     `}
                     style={getFeedbackStyle(file, rank)}
@@ -114,7 +123,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                     stroke="#e6b17e"
                     strokeWidth="4"
                     strokeLinecap="round"
-                    className="opacity-90 drop-shadow-md"
+                    className="opacity-90 drop-shadow-md animate-in fade-in duration-300"
                   />
                   <circle 
                     cx={`${getTargetPosition(activeTarget).x}%`}
@@ -137,8 +146,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
 
         </div>
         
-        {/* Right Labels (Ranks) */}
-        <div className="flex flex-col h-[90vw] md:h-[80vw] max-h-[540px] justify-between ml-4 md:ml-6 py-2 md:py-4">
+        {/* Right Ranks */}
+        <div className={`grid grid-rows-8 py-1 md:py-[12px] ${sideLabelWidth} shrink-0`}>
           {RANKS.map((rank) => (
             <div key={`right-${rank}`} className={rankLabelClasses}>
               {rank}
@@ -147,17 +156,20 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
       </div>
 
-      {/* Bottom Labels (Files) */}
-      <div className="flex w-full max-w-[90vw] md:max-w-[80vw] lg:max-w-[540px] mt-3 md:mt-5 pl-10 md:pl-14 pr-10 md:pr-14">
-        {FILES.map((file) => (
-          <div key={`bottom-${file}`} className={labelClasses}>
-            {file}
-          </div>
-        ))}
+      {/* Bottom Section: Spacer + Files + Spacer */}
+      <div className={`flex items-start justify-center w-full mt-1 md:mt-2 ${gapSize}`}>
+         <div className={`${sideLabelWidth} shrink-0`} />
+         <div className="flex-1 flex px-1 md:px-[12px] shrink-0">
+            {FILES.map((file) => (
+              <div key={`bottom-${file}`} className={labelClasses}>
+                {file}
+              </div>
+            ))}
+         </div>
+         <div className={`${sideLabelWidth} shrink-0`} />
       </div>
 
-      <div className="h-6 md:h-10"></div>
-
+      <div className="h-4 md:h-6"></div>
     </div>
   );
 };
