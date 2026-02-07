@@ -235,6 +235,13 @@ const App: React.FC = () => {
     } else {
         playSound('wrong');
         setIsExploding(true);
+        
+        // Deduct 5 points for explosion (wrong answer), floor at 0
+        setStats(prev => ({
+          ...prev,
+          score: Math.max(0, prev.score - 5)
+        }));
+
         setTimeout(() => {
           setIsExploding(false);
           handleMiss();
