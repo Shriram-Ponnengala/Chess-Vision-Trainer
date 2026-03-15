@@ -328,30 +328,37 @@ const App: React.FC = () => {
   return (
     <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-cream overflow-hidden">
       
-      {/* Background Enhancements */}
-      <div 
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${gameState === GameState.MAIN_PLAY ? 'opacity-0' : 'opacity-100'}`}
-        style={{
-          backgroundImage: `conic-gradient(#551e19 90deg, transparent 90deg 180deg, #551e19 180deg 270deg, transparent 270deg)`,
-          backgroundSize: '400px 400px',
-          opacity: 0.02
-        }}
-      />
-      {/* Persistent Oversized Board Background */}
+      {/* Chessboard Texture Background */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `conic-gradient(#a67c52 90deg, transparent 90deg 180deg, #a67c52 180deg 270deg, transparent 270deg)`,
-          backgroundSize: '600px 600px',
-          opacity: 0.03
+          backgroundImage: `conic-gradient(rgba(85, 30, 25, 0.04) 90deg, transparent 90deg 180deg, rgba(85, 30, 25, 0.04) 180deg 270deg, transparent 270deg)`,
+          backgroundSize: '120px 120px',
         }}
       />
 
+      {/* Chess Pieces Pattern */}
       <div 
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${gameState === GameState.MAIN_PLAY ? 'opacity-0' : 'opacity-100'}`}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='50' y='100' font-size='80' fill='rgba(85,30,25,0.03)'%3E♞%3C/text%3E%3Ctext x='280' y='320' font-size='100' fill='rgba(85,30,25,0.03)'%3E♜%3C/text%3E%3Ctext x='320' y='100' font-size='60' fill='rgba(85,30,25,0.03)'%3E♟%3C/text%3E%3Ctext x='80' y='350' font-size='90' fill='rgba(85,30,25,0.03)'%3E♛%3C/text%3E%3Ctext x='200' y='220' font-size='85' fill='rgba(85,30,25,0.03)'%3E♚%3C/text%3E%3C/svg%3E")`,
+          backgroundSize: '400px 400px',
+        }}
+      />
+
+      {/* Wood Grain Texture Overlay */}
+      <div 
+        className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-20"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.1' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      {/* Subtle Noise */}
+      <div 
+        className="absolute inset-0 pointer-events-none opacity-[0.015]"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          opacity: 0.015,
         }}
       />
       
@@ -361,7 +368,7 @@ const App: React.FC = () => {
       {gameState === GameState.MAIN_PLAY && renderHUD()}
 
       {/* Main Game Container - Responsive Padding Logic */}
-      <div className="relative z-10 pt-20 md:pt-28 pb-4 flex-1 flex flex-col justify-center items-center w-full max-w-[620px] px-4 h-full">
+      <div className={`relative z-10 pt-20 md:pt-28 pb-4 flex-1 flex flex-col justify-center items-center w-full max-w-[620px] px-4 h-full transition-opacity duration-500 ${gameState === GameState.MENU ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <ChessBoard 
           onSquareClick={handleSquareClick}
           activeTarget={activeTarget}
@@ -373,9 +380,12 @@ const App: React.FC = () => {
       </div>
 
       {gameState === GameState.MENU && (
-        <div className="absolute inset-0 bg-cream/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in zoom-in-95 duration-500 overflow-y-auto">
-          <div className="bg-white p-6 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(85,30,25,0.12)] border border-white max-w-md w-full transform transition-all duration-500 hover:scale-[1.01] my-auto">
-            <button onClick={() => setIsMuted(!isMuted)} className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-9 md:h-9 rounded-xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-300 border border-brown/5 hover:border-brown/20 active:scale-90">
+        <div className="absolute inset-0 bg-cream/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in zoom-in-95 duration-500 overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-md p-6 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(85,30,25,0.15)] border border-white/50 max-w-md w-full transform transition-all duration-500 hover:scale-[1.01] my-auto relative overflow-hidden">
+            {/* Subtle texture inside the card */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ctext x='10' y='40' font-size='30' fill='%23551e19'%3E♞%3C/text%3E%3Ctext x='60' y='90' font-size='30' fill='%23551e19'%3E♜%3C/text%3E%3C/svg%3E")`, backgroundSize: '100px 100px' }} />
+            
+            <button onClick={() => setIsMuted(!isMuted)} className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-9 md:h-9 rounded-xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-300 border border-brown/5 hover:border-brown/20 active:scale-90 z-10">
               {isMuted ? <VolumeX size={16} className="text-brown/30" /> : <Volume2 size={16} className="text-brown/60" />}
             </button>
             <div className="w-14 h-14 md:w-16 md:h-16 bg-brown rounded-2xl mx-auto mb-4 md:mb-6 flex items-center justify-center shadow-lg shadow-brown/10 -rotate-2 hover:rotate-0 transition-transform duration-500">
