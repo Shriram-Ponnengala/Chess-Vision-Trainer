@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion } from 'motion/react';
 import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX, Home } from 'lucide-react';
 import { GameState, Coordinate, GameStats, MoveHistory, Difficulty } from './types';
 import { MAIN_DURATION, getRandomCoordinate, coordinateToString, DIFFICULTY_SETTINGS } from './constants';
@@ -408,18 +409,44 @@ const App: React.FC = () => {
 
       {gameState === GameState.SUMMARY && (
         <div className="absolute inset-0 bg-brown/98 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-500 overflow-y-auto">
-          <div className="bg-cream text-brown p-6 md:p-14 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-sm w-full mx-auto border border-white/10 relative text-center scale-in duration-300 my-auto mt-12 md:mt-0">
-            <div className="absolute -top-5 md:-top-6 left-1/2 -translate-x-1/2 bg-gold text-brown px-6 md:px-10 py-3 md:py-4 rounded-full font-bold uppercase tracking-[0.2em] md:tracking-[0.3em] text-[10px] md:text-xs shadow-2xl border-[4px] md:border-[6px] border-brown whitespace-nowrap animate-bounce z-10">
-              Session Complete
-            </div>
-            <div className="mt-8 md:mt-12 mb-6 md:mb-10">
-              <div className="text-[10px] uppercase font-bold text-brown/40 mb-2 md:mb-3 tracking-[0.2em]">Accuracy</div>
-              <div className="text-5xl md:text-8xl font-bold text-brown tracking-tighter mb-2 md:mb-4 animate-[scale-in_0.5s_ease-out]">
-                {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
+          {/* Celebration Graphics */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+            {[...Array(40)].map((_, i) => {
+              const colors = ['bg-gold', 'bg-white', 'bg-[#f2cfaf]', 'bg-orange-400', 'bg-yellow-300'];
+              const color = colors[Math.floor(Math.random() * colors.length)];
+              const isCircle = Math.random() > 0.5;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 1, scale: 0, x: 0, y: 0 }}
+                  animate={{ 
+                    opacity: [1, 1, 0],
+                    scale: [0, Math.random() + 0.5, 0.5],
+                    x: `${(Math.random() - 0.5) * 100}vw`,
+                    y: `${(Math.random() - 0.5) * 100}vh`,
+                    rotate: Math.random() * 720
+                  }}
+                  transition={{ duration: 2.5 + Math.random(), ease: "easeOut", delay: Math.random() * 0.2 }}
+                  className={`absolute w-3 h-3 md:w-4 md:h-4 ${color} ${isCircle ? 'rounded-full' : 'rounded-sm'}`}
+                />
+              );
+            })}
+          </div>
+
+          <div className="bg-cream text-brown p-6 md:p-14 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-sm w-full mx-auto border border-white/10 relative text-center scale-in duration-300 my-auto mt-12 md:mt-0 z-10">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
+              className="mt-8 md:mt-12 mb-6 md:mb-10"
+            >
+              <h2 className="text-3xl md:text-4xl font-bold text-brown mb-6 tracking-tight">Congratulations!</h2>
+              <div className="text-[10px] uppercase font-bold text-brown/40 mb-2 md:mb-3 tracking-[0.2em]">Score</div>
+              <div className="text-6xl md:text-9xl font-bold text-brown tracking-tighter mb-2 md:mb-4">
+                {stats.score}
               </div>
-              <div className="text-xs md:text-sm font-bold text-brown/60 uppercase tracking-[0.1em]">Score: {stats.score}</div>
-            </div>
-            <div className="space-y-3 md:space-y-4">
+            </motion.div>
+            <div className="space-y-3 md:space-y-4 relative z-20">
               <button 
                 onClick={startGame} 
                 className="w-full bg-brown text-gold font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#431814] hover:shadow-xl active:scale-95 transition-all duration-300 shadow-xl shadow-brown/40 text-sm md:text-base"
