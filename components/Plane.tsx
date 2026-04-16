@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Plane as PlaneIcon } from 'lucide-react';
 import { Coordinate } from '../types';
 import { coordinateToString } from '../constants';
@@ -26,12 +27,33 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExplodin
         transition: isLanding ? 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' : 'none'
       }}
     >
-      {/* Explosion Effect */}
+      {/* Explosion & Fire Effect */}
       {isExploding && (
         <div className="absolute inset-0 flex items-center justify-center z-50">
+           {/* Flash */}
            <div className="absolute w-16 h-16 bg-white rounded-full opacity-90 animate-[ping_0.2s_ease-out_1]" />
            <div className="absolute w-20 h-20 border-4 border-gold rounded-full opacity-0 animate-[ping_0.4s_cubic-bezier(0,0,0.2,1)_1]" />
-           <div className="w-24 h-24 bg-gold/50 rounded-full animate-[pulse_0.4s_ease-out_1]" />
+           
+           {/* Fire Particles */}
+           {[...Array(12)].map((_, i) => (
+             <motion.div
+               key={i}
+               initial={{ scale: 0, opacity: 1, x: 0, y: 0 }}
+               animate={{ 
+                 scale: [1, 1.5, 0],
+                 opacity: [1, 0.8, 0],
+                 x: (Math.random() - 0.5) * 60,
+                 y: (Math.random() - 0.5) * 60 - 20,
+               }}
+               transition={{ duration: 0.5 + Math.random() * 0.3, ease: "easeOut" }}
+               className={`absolute w-4 h-4 rounded-full ${
+                 i % 3 === 0 ? 'bg-orange-500' : i % 3 === 1 ? 'bg-red-500' : 'bg-yellow-400'
+               } blur-sm`}
+             />
+           ))}
+
+           {/* Core Glow */}
+           <div className="w-24 h-24 bg-orange-500/40 rounded-full animate-[pulse_0.4s_ease-out_1] blur-md" />
         </div>
       )}
 

@@ -391,7 +391,7 @@ const App: React.FC = () => {
             <div className="w-14 h-14 md:w-16 md:h-16 bg-brown rounded-2xl mx-auto mb-4 md:mb-6 flex items-center justify-center shadow-lg shadow-brown/10 -rotate-2 hover:rotate-0 transition-transform duration-500">
                <PlaneIcon size={28} className="text-white md:w-8 md:h-8" />
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold text-brown mb-2 tracking-tight">Plane to E4</h1>
+            <h1 className="text-2xl md:text-4xl font-bold text-brown mb-2 tracking-tight">Chess Coordinate Trainer</h1>
             <p className="text-brown/40 mb-4 md:mb-6 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-relaxed">Advanced Coordinate Mastery</p>
             <div className="mb-4 md:mb-6">
               <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-2 md:mb-3">Choose Intensity</h3>
