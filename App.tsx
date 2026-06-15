@@ -25,6 +25,11 @@ const App: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [lastRunAccuracy, setLastRunAccuracy] = useState<number | null>(null);
+  const [highScore, setHighScore] = useState<number>(() => {
+    const saved = localStorage.getItem('chessCoordinateTrainerHighScore');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [isNewPersonalBest, setIsNewPersonalBest] = useState(false);
 
   // Gameplay State
   const [activeTarget, setActiveTarget] = useState<Coordinate | null>(null);
@@ -38,63 +43,168 @@ const App: React.FC = () => {
   const lastTimeRef = useRef<number>(0);
   const spawnTimeRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const soundBuffers = useRef<{ correct: AudioBuffer | null; wrong: AudioBuffer | null }>({
-    correct: null,
-    wrong: null,
-  });
 
-  // --- Sound Initialization ---
-  useEffect(() => {
-    const initAudio = () => {
-      if (soundBuffers.current.correct) return; 
-
+  // --- Sound Playback (Web Audio API Synthesized) ---
+  const playSound = useCallback((type: 'correct' | 'wrong' | 'milestone' | 'plane_drop' | 'heartbeat' | 'game_over' | 'personal_best') => {
+    if (isMuted) return;
+    
+    let ctx = audioContextRef.current;
+    if (!ctx) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const ctx = new AudioContextClass();
-      audioContextRef.current = ctx;
-
-      const createBuffer = (duration: number, synthesizer: (t: number) => number) => {
-        const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < data.length; i++) {
-          data[i] = synthesizer(i / ctx.sampleRate);
-        }
-        return buffer;
-      };
-
-      soundBuffers.current.correct = createBuffer(0.14, (t) => {
-        const freq = 880; 
-        const decay = Math.exp(-t * 30);
-        return Math.sin(2 * Math.PI * freq * t) * 0.04 * decay;
-      });
-
-      soundBuffers.current.wrong = createBuffer(0.25, (t) => {
-        const freq = 110 * Math.exp(-t * 12); 
-        const decay = Math.exp(-t * 15);
-        const tri = (Math.abs((t * freq % 1) - 0.5) * 4 - 1);
-        return tri * 0.08 * decay;
-      });
-    };
-
-    window.addEventListener('mousedown', initAudio, { once: true });
-    window.addEventListener('touchstart', initAudio, { once: true });
-    return () => {
-      window.removeEventListener('mousedown', initAudio);
-      window.removeEventListener('touchstart', initAudio);
-    };
-  }, []);
-
-  const playSound = useCallback((type: 'correct' | 'wrong') => {
-    if (isMuted || !audioContextRef.current) return;
-    const ctx = audioContextRef.current;
+      if (AudioContextClass) {
+        ctx = new AudioContextClass();
+        audioContextRef.current = ctx;
+      }
+    }
+    
+    if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
-    const buffer = soundBuffers.current[type];
-    if (!buffer) return;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start();
+
+    const now = ctx.currentTime;
+
+    if (type === 'correct') {
+      // Correct answer: Two-note ascending chime (C5 → E5, 100ms each, sine wave)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now); // C5
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.06, now + 0.015);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.1);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.1); // E5
+      gain2.gain.setValueAtTime(0, now + 0.1);
+      gain2.gain.linearRampToValueAtTime(0.06, now + 0.115);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.1);
+      osc2.stop(now + 0.2);
+    } 
+    else if (type === 'wrong') {
+      // Wrong answer: Low buzz (150Hz, 200ms, sawtooth wave, quick fade)
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.06, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } 
+    else if (type === 'milestone') {
+      // Streak milestone (5x): Three-note ascending fanfare (C5 → E5 → G5, 80ms each)
+      const duration = 0.08;
+      const freqs = [523.25, 659.25, 783.99]; // C5, E5, G5
+      freqs.forEach((freq, idx) => {
+        const time = now + idx * duration;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.07, time + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(time);
+        osc.stop(time + duration);
+      });
+    } 
+    else if (type === 'plane_drop') {
+      // Plane drop start: Soft descending whistle (800Hz → 400Hz, 300ms, sine wave)
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(400, now + 0.3);
+
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.04, now + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } 
+    else if (type === 'heartbeat') {
+      // Heartbeat (last 10s): Low thump (60Hz, 100ms, sine wave with sharp attack)
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(60, now);
+
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.12, now + 0.01); // Sharp attack
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } 
+    else if (type === 'game_over') {
+      // Game over: Descending four-note melody (G5 → E5 → C5 → C4, 150ms each)
+      const duration = 0.15;
+      const freqs = [783.99, 659.25, 523.25, 261.63]; // G5, E5, C5, C4
+      freqs.forEach((freq, idx) => {
+        const time = now + idx * duration;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.07, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration + 0.05);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(time);
+        osc.stop(time + duration + 0.05);
+      });
+    } 
+    else if (type === 'personal_best') {
+      // New personal best: Bright ascending arpeggio (C5 → E5 → G5 → C6, 100ms each)
+      const duration = 0.1;
+      const freqs = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      freqs.forEach((freq, idx) => {
+        const time = now + idx * duration;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.08, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(time);
+        osc.stop(time + duration + 0.1);
+      });
+    }
   }, [isMuted]);
 
   // --- Game Loop Logic ---
@@ -104,7 +214,8 @@ const App: React.FC = () => {
     setPlaneProgress(0);
     spawnTimeRef.current = Date.now();
     setStats(prev => ({ ...prev, totalSpawns: prev.totalSpawns + 1 }));
-  }, []);
+    playSound('plane_drop');
+  }, [playSound]);
 
   const handleMiss = useCallback(() => {
     setStats(prev => ({
@@ -162,6 +273,9 @@ const App: React.FC = () => {
     if (!isPaused && gameState === GameState.MAIN_PLAY) {
       interval = setInterval(() => {
         setTimeLeft(prev => {
+          if (prev <= 11 && prev > 1) {
+            playSound('heartbeat');
+          }
           if (prev <= 1) {
             handlePhaseComplete();
             return 0;
@@ -171,7 +285,7 @@ const App: React.FC = () => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [gameState, isPaused]);
+  }, [gameState, isPaused, playSound]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(updateGame);
@@ -192,6 +306,19 @@ const App: React.FC = () => {
     if (storedAccuracy) setLastRunAccuracy(parseInt(storedAccuracy, 10));
     localStorage.setItem('lastRunAccuracy', accuracy.toString());
 
+    // Personal Best Achievement Check
+    const currentHighScore = parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10);
+    const isNewBest = stats.score > currentHighScore;
+    if (isNewBest) {
+      localStorage.setItem('chessCoordinateTrainerHighScore', stats.score.toString());
+      setHighScore(stats.score);
+      setIsNewPersonalBest(true);
+      playSound('personal_best');
+    } else {
+      setIsNewPersonalBest(false);
+      playSound('game_over');
+    }
+
     const feedback = await getCoachFeedback(history, stats.score, accuracy);
     setCoachFeedback(feedback);
     setIsLoadingFeedback(false);
@@ -204,10 +331,16 @@ const App: React.FC = () => {
     const reactionTime = Date.now() - spawnTimeRef.current;
 
     setLastResult({ coord, success: isCorrect });
-    setTimeout(() => setLastResult(null), 250);
+    setTimeout(() => setLastResult(null), 400);
 
     if (isCorrect) {
-      playSound('correct');
+      const newStreak = stats.streak + 1;
+      if (newStreak % 5 === 0) {
+        playSound('milestone');
+      } else {
+        playSound('correct');
+      }
+
       setStats(prev => {
         const newStreak = prev.streak + 1;
         let pointsToAdd = 5;
@@ -267,32 +400,102 @@ const App: React.FC = () => {
 
   const renderHUD = () => {
     const timePercent = (timeLeft / MAIN_DURATION) * 100;
-    
+    const streak = stats.streak;
+
+    // Determine visual states for the streak counter
+    let streakContainerClass = "flex items-center gap-1.5 md:gap-2 px-3 py-1 rounded-xl transition-all duration-300 relative overflow-visible z-10";
+    let zapIconClass = "md:w-5 md:h-5 transition-all duration-300 z-10 relative";
+    let showLightning = false;
+    let flameType: 'none' | 'orange' | 'blue' = 'none';
+
+    if (streak >= 5 && streak <= 9) {
+      // Glow caramel
+      streakContainerClass += " glow-caramel-aura bg-gold/15 border border-gold/40";
+      zapIconClass += " fill-gold text-gold scale-125";
+    } else if (streak >= 10 && streak <= 14) {
+      // Orange flame
+      streakContainerClass += " bg-gold/15 border border-gold/40 shadow-inner";
+      zapIconClass += " fill-gold text-white scale-125";
+      flameType = 'orange';
+    } else if (streak >= 15 && streak <= 19) {
+      // Blue flame and subtle shake
+      streakContainerClass += " bg-blue-500/15 border border-blue-400/40 animate-subtle-shake";
+      zapIconClass += " fill-blue-400 text-blue-100 scale-125";
+      flameType = 'blue';
+    } else if (streak >= 20) {
+      // Blue flame, glowing background, subtle shake, lightning bolt active
+      streakContainerClass += " bg-yellow-400/25 border border-yellow-300/50 glow-caramel-aura animate-subtle-shake";
+      zapIconClass += " fill-yellow-400 text-yellow-100 scale-125";
+      showLightning = true;
+      flameType = 'blue';
+    } else if (streak > 2) {
+      zapIconClass += " fill-gold text-gold scale-125";
+    } else {
+      zapIconClass += " text-cream/20";
+    }
+
     return (
       <div className="w-full fixed top-0 left-0 right-0 z-40 flex flex-col items-center pointer-events-none">
-         <div className="w-full bg-brown text-cream shadow-xl border-b border-white/5 py-2 md:py-4 px-3 md:px-8 pointer-events-auto transition-all duration-300">
+         <div className={`w-full bg-navy text-cream shadow-xl border-b border-[#c8854a]/20 py-2 md:py-4 px-3 md:px-8 pointer-events-auto transition-all duration-300 ${streak >= 20 ? 'shimmer-gold-bar' : ''}`}>
             <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 md:gap-4">
               
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[90px]">
-                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-0.5 md:mb-1">Score</span>
-                 <span key={stats.score} className="text-xl md:text-3xl font-bold leading-none text-white tracking-tight tabular-nums animate-[scale-in_0.2s_ease-out]">
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5 md:mb-1">Score</span>
+                 <span key={stats.score} className="text-xl md:text-3xl font-bold leading-none text-cream tracking-tight tabular-nums animate-[scale-in_0.2s_ease-out]">
                    {stats.score}
                  </span>
               </div>
 
-              <div className="flex flex-col items-center min-w-[60px] md:min-w-[90px]">
-                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-0.5 md:mb-1">Streak</span>
-                 <div className="flex items-center gap-1.5 md:gap-2">
-                    <Zap size={14} className={`md:w-5 md:h-5 transition-all duration-300 ${stats.streak > 2 ? 'fill-gold text-gold scale-125' : 'text-white/20'}`} />
-                    <span key={stats.streak} className="text-xl md:text-3xl font-bold leading-none text-white tracking-tight tabular-nums animate-[scale-in_0.2s_ease-out]">
-                      {stats.streak}
+              <div className="flex flex-col items-center min-w-[70px] md:min-w-[120px] overflow-visible">
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5 md:mb-1">Streak</span>
+                 <div className={streakContainerClass}>
+                    {/* SVG Flame Behind the numbers */}
+                    {flameType !== 'none' && (
+                      <svg 
+                        className={`absolute inset-x-0 bottom-[-8px] h-[52px] w-full pointer-events-none opacity-60 z-0 ${flameType === 'blue' ? 'flame-blue' : 'flame-orange'}`}
+                        viewBox="0 0 100 120" 
+                        preserveAspectRatio="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <defs>
+                          <linearGradient id="orange-fire-gradient" x1="0" y1="1" x2="0" y2="0">
+                            <stop offset="0%" stopColor="#ea580c" stopOpacity="0.8" />
+                            <stop offset="50%" stopColor="#f97316" stopOpacity="0.95" />
+                            <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
+                          </linearGradient>
+                          <linearGradient id="blue-fire-gradient" x1="0" y1="1" x2="0" y2="0">
+                            <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.85" />
+                            <stop offset="50%" stopColor="#60a5fa" stopOpacity="0.95" />
+                            <stop offset="100%" stopColor="#e0f2fe" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path 
+                          d="M15,100 C30,90 20,30 50,10 C80,30 70,90 85,100 C70,111 30,111 15,100 Z" 
+                          fill={flameType === 'blue' ? "url(#blue-fire-gradient)" : "url(#orange-fire-gradient)"} 
+                        />
+                        <path 
+                          d="M30,100 C40,95 35,60 50,40 C65,60 60,95 70,100 C60,106 40,106 30,100 Z" 
+                          fill={flameType === 'blue' ? "#bae6fd" : "#fef08a"} 
+                          className="opacity-80"
+                        />
+                      </svg>
+                    )}
+
+                    <Zap size={14} className={zapIconClass} />
+                    <span key={stats.streak} className="text-xl md:text-3xl font-bold leading-none text-cream tracking-tight tabular-nums animate-[scale-in_0.2s_ease-out] z-10 relative drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                      {streak}
                     </span>
+
+                    {/* Lightning Bolt extra indicator for Streak 20+ */}
+                    {showLightning && (
+                      <Zap size={16} className="md:w-6 md:h-6 text-yellow-300 fill-yellow-200 animate-bounce absolute -right-6 top-1/2 -translate-y-1/2 drop-shadow-[0_0_12px_rgba(250,204,21,0.95)] z-20" />
+                    )}
                  </div>
               </div>
 
               <div className="flex flex-col items-center min-w-[60px] md:min-w-[90px]">
-                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/60 mb-0.5 md:mb-1">Time</span>
-                 <span className={`text-xl md:text-3xl font-bold leading-none tabular-nums tracking-tight transition-all duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse scale-110' : 'text-white'}`}>
+                 <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] text-gold/80 mb-0.5 md:mb-1">Time</span>
+                 <span className={`text-xl md:text-3xl font-bold leading-none tabular-nums tracking-tight transition-all duration-300 ${timeLeft <= 10 ? 'text-gold animate-pulse scale-110' : 'text-cream'}`}>
                    {timeLeft}
                  </span>
               </div>
@@ -300,22 +503,22 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 md:gap-3 ml-2">
                 <button 
                   onClick={() => setIsMuted(!isMuted)}
-                  className="group w-9 h-9 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 active:scale-90 flex items-center justify-center transition-all duration-300 border border-white/10 hover:border-white/30"
+                  className="group w-9 h-9 md:w-11 md:h-11 rounded-xl bg-cream/5 hover:bg-cream/10 active:scale-90 flex items-center justify-center transition-all duration-300 border border-cream/10 hover:border-cream/30"
                 >
-                  {isMuted ? <VolumeX size={16} className="text-white/40 group-hover:text-white/60" /> : <Volume2 size={16} className="text-white group-hover:text-gold" />}
+                  {isMuted ? <VolumeX size={16} className="text-cream/40 group-hover:text-cream/60" /> : <Volume2 size={16} className="text-cream group-hover:text-gold" />}
                 </button>
 
                 <button 
                   onClick={() => setIsPaused(!isPaused)}
-                  className="group w-9 h-9 md:w-11 md:h-11 rounded-xl bg-white/5 hover:bg-white/10 active:scale-90 flex items-center justify-center transition-all duration-300 border border-white/10 hover:border-white/30"
+                  className="group w-9 h-9 md:w-11 md:h-11 rounded-xl bg-cream/5 hover:bg-cream/10 active:scale-90 flex items-center justify-center transition-all duration-300 border border-cream/10 hover:border-cream/30"
                 >
-                  {isPaused ? <Play size={16} className="fill-white" /> : <Pause size={16} className="fill-white" />}
+                  {isPaused ? <Play size={16} className="fill-cream" /> : <Pause size={16} className="fill-cream" />}
                 </button>
               </div>
             </div>
          </div>
          
-         <div className="w-full h-1 bg-brown">
+         <div className="w-full h-1 bg-navy/35">
             <div 
               className="h-full bg-gold transition-all duration-1000 ease-linear rounded-r-full"
               style={{ width: `${timePercent}%` }}
@@ -326,13 +529,13 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-cream overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-navy overflow-hidden">
       
       {/* Chessboard Texture Background */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `conic-gradient(rgba(85, 30, 25, 0.04) 90deg, transparent 90deg 180deg, rgba(85, 30, 25, 0.04) 180deg 270deg, transparent 270deg)`,
+          backgroundImage: `conic-gradient(rgba(253, 240, 228, 0.04) 90deg, transparent 90deg 180deg, rgba(253, 240, 228, 0.04) 180deg 270deg, transparent 270deg)`,
           backgroundSize: '120px 120px',
         }}
       />
@@ -341,7 +544,7 @@ const App: React.FC = () => {
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='50' y='100' font-size='80' fill='rgba(85,30,25,0.03)'%3E♞%3C/text%3E%3Ctext x='280' y='320' font-size='100' fill='rgba(85,30,25,0.03)'%3E♜%3C/text%3E%3Ctext x='320' y='100' font-size='60' fill='rgba(85,30,25,0.03)'%3E♟%3C/text%3E%3Ctext x='80' y='350' font-size='90' fill='rgba(85,30,25,0.03)'%3E♛%3C/text%3E%3Ctext x='200' y='220' font-size='85' fill='rgba(85,30,25,0.03)'%3E♚%3C/text%3E%3C/svg%3E")`,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='50' y='100' font-size='80' fill='rgba(253,240,228,0.02)'%3E♞%3C/text%3E%3Ctext x='280' y='320' font-size='100' fill='rgba(253,240,228,0.02)'%3E♜%3C/text%3E%3Ctext x='320' y='100' font-size='60' fill='rgba(253,240,228,0.02)'%3E♟%3C/text%3E%3Ctext x='80' y='350' font-size='90' fill='rgba(253,240,228,0.02)'%3E♛%3C/text%3E%3Ctext x='200' y='220' font-size='85' fill='rgba(253,240,228,0.02)'%3E♚%3C/text%3E%3C/svg%3E")`,
           backgroundSize: '400px 400px',
         }}
       />
@@ -362,8 +565,8 @@ const App: React.FC = () => {
         }}
       />
       
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-[0.08] pointer-events-none blur-[120px]"></div>
-      <div className="absolute inset-0 bg-gradient-to-b from-cream via-cream to-[#f2cfaf] opacity-40 pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-[0.05] pointer-events-none blur-[120px]"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-navy via-navy to-[#1f354d] opacity-80 pointer-events-none"></div>
 
       {gameState === GameState.MAIN_PLAY && renderHUD()}
 
@@ -380,19 +583,19 @@ const App: React.FC = () => {
       </div>
 
       {gameState === GameState.MENU && (
-        <div className="absolute inset-0 bg-cream/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in zoom-in-95 duration-500 overflow-y-auto">
-          <div className="bg-white/95 backdrop-blur-md p-6 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(85,30,25,0.15)] border border-white/50 max-w-md w-full transform transition-all duration-500 hover:scale-[1.01] my-auto relative overflow-hidden">
+        <div className="absolute inset-0 bg-navy/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in zoom-in-95 duration-500 overflow-y-auto">
+          <div className="bg-cream p-6 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(45,74,107,0.35)] border border-white/20 max-w-md w-full transform transition-all duration-500 hover:scale-[1.01] my-auto relative overflow-hidden">
             {/* Subtle texture inside the card */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ctext x='10' y='40' font-size='30' fill='%23551e19'%3E♞%3C/text%3E%3Ctext x='60' y='90' font-size='30' fill='%23551e19'%3E♜%3C/text%3E%3C/svg%3E")`, backgroundSize: '100px 100px' }} />
+            <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ctext x='10' y='40' font-size='30' fill='%234a2018'%3E♞%3C/text%3E%3Ctext x='60' y='90' font-size='30' fill='%234a2018'%3E♜%3C/text%3E%3C/svg%3E")`, backgroundSize: '100px 100px' }} />
             
             <button onClick={() => setIsMuted(!isMuted)} className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-9 md:h-9 rounded-xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-300 border border-brown/5 hover:border-brown/20 active:scale-90 z-10">
               {isMuted ? <VolumeX size={16} className="text-brown/30" /> : <Volume2 size={16} className="text-brown/60" />}
             </button>
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-brown rounded-2xl mx-auto mb-4 md:mb-6 flex items-center justify-center shadow-lg shadow-brown/10 -rotate-2 hover:rotate-0 transition-transform duration-500">
-               <PlaneIcon size={28} className="text-white md:w-8 md:h-8" />
+            <div className="w-14 h-14 md:w-16 md:h-16 bg-navy rounded-2xl mx-auto mb-4 md:mb-6 flex items-center justify-center shadow-lg shadow-navy/20 -rotate-2 hover:rotate-0 transition-transform duration-500">
+               <PlaneIcon size={28} className="text-gold md:w-8 md:h-8" />
             </div>
             <h1 className="text-2xl md:text-4xl font-bold text-brown mb-2 tracking-tight">Chess Coordinate Trainer</h1>
-            <p className="text-brown/40 mb-4 md:mb-6 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-relaxed">Advanced Coordinate Mastery</p>
+            <p className="text-brown/60 mb-4 md:mb-6 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-relaxed">Advanced Coordinate Mastery</p>
             <div className="mb-4 md:mb-6">
               <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-2 md:mb-3">Choose Intensity</h3>
               <div className="grid grid-cols-3 gap-2 p-1.5 bg-brown/5 rounded-[1.25rem] border border-brown/5">
@@ -400,7 +603,7 @@ const App: React.FC = () => {
                   <button 
                     key={d} 
                     onClick={() => setDifficulty(d)} 
-                    className={`py-2 md:py-2.5 rounded-xl font-bold text-[10px] md:text-xs uppercase transition-all duration-300 active:scale-95 ${difficulty === d ? 'bg-brown text-gold shadow-md shadow-brown/15' : 'text-brown/40 hover:text-brown/70 hover:bg-brown/5'}`}
+                    className={`py-2 md:py-2.5 rounded-xl font-bold text-[10px] md:text-xs uppercase transition-all duration-300 active:scale-95 ${difficulty === d ? 'bg-gold text-white shadow-md shadow-gold/25' : 'text-brown/40 hover:text-brown/70 hover:bg-brown/5'}`}
                   >
                     {d}
                   </button>
@@ -409,7 +612,7 @@ const App: React.FC = () => {
             </div>
             <button 
               onClick={startGame} 
-              className="group w-full bg-brown text-white font-bold text-sm md:text-base py-4 md:py-5 rounded-xl shadow-xl shadow-brown/20 hover:bg-[#4a1915] hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3"
+              className="group w-full bg-gold text-cream font-bold text-sm md:text-base py-4 md:py-5 rounded-xl shadow-xl shadow-gold/25 hover:bg-[#b0733d] hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3"
             >
               <Play size={18} className="fill-current group-hover:translate-x-1 transition-transform" /> START PLAYING
             </button>
@@ -418,11 +621,11 @@ const App: React.FC = () => {
       )}
 
       {gameState === GameState.SUMMARY && (
-        <div className="absolute inset-0 bg-brown/98 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-500 overflow-y-auto">
+        <div className="absolute inset-0 bg-navy/95 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-500 overflow-y-auto">
           {/* Celebration Graphics */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
             {[...Array(40)].map((_, i) => {
-              const colors = ['bg-gold', 'bg-white', 'bg-[#f2cfaf]', 'bg-orange-400', 'bg-yellow-300'];
+              const colors = ['bg-gold', 'bg-white', 'bg-cream', 'bg-[#c8854a]', 'bg-[#e8bfa4]'];
               const color = colors[Math.floor(Math.random() * colors.length)];
               const isCircle = Math.random() > 0.5;
               return (
@@ -443,7 +646,7 @@ const App: React.FC = () => {
             })}
           </div>
 
-          <div className="bg-cream text-brown p-6 md:p-14 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_48px_96px_-24px_rgba(0,0,0,0.5)] max-w-sm w-full mx-auto border border-white/10 relative text-center scale-in duration-300 my-auto mt-12 md:mt-0 z-10">
+          <div className="bg-cream text-brown p-6 md:p-14 rounded-[2.5rem] md:rounded-[3rem] shadow-[0_24px_64px_rgba(45,74,107,0.3)] max-w-sm w-full mx-auto border border-white/10 relative text-center scale-in duration-300 my-auto mt-12 md:mt-0 z-10">
             <motion.div 
               initial={{ scale: 0.8, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -451,6 +654,11 @@ const App: React.FC = () => {
               className="mt-8 md:mt-12 mb-6 md:mb-10"
             >
               <h2 className="text-3xl md:text-4xl font-bold text-brown mb-6 tracking-tight">Congratulations!</h2>
+              {isNewPersonalBest && (
+                <div className="inline-block bg-gold text-cream font-bold px-4 py-1.5 rounded-full text-xs uppercase tracking-wider mb-4 animate-bounce shadow-md shadow-gold/25 border border-white/20">
+                  👑 New Personal Best!
+                </div>
+              )}
               <div className="text-[10px] uppercase font-bold text-brown/40 mb-2 md:mb-3 tracking-[0.2em]">Score</div>
               <div className="text-6xl md:text-9xl font-bold text-brown tracking-tighter mb-2 md:mb-4">
                 {stats.score}
@@ -459,13 +667,13 @@ const App: React.FC = () => {
             <div className="space-y-3 md:space-y-4 relative z-20">
               <button 
                 onClick={startGame} 
-                className="w-full bg-brown text-gold font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#431814] hover:shadow-xl active:scale-95 transition-all duration-300 shadow-xl shadow-brown/40 text-sm md:text-base"
+                className="w-full bg-gold text-white font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-[#b0733d] hover:shadow-xl active:scale-95 transition-all duration-300 shadow-xl shadow-gold/25 text-sm md:text-base"
               >
                 <RotateCcw size={16} /> PLAY AGAIN
               </button>
               <button 
                 onClick={() => setGameState(GameState.MENU)} 
-                className="w-full bg-cream text-brown font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-brown/5 active:scale-95 transition-all duration-300 border border-brown/10 text-sm md:text-base"
+                className="w-full bg-transparent text-brown hover:bg-brown/10 font-bold py-4 md:py-5 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all duration-300 border border-brown/20 text-sm md:text-base"
               >
                 <Home size={16} /> HOME
               </button>
@@ -475,24 +683,24 @@ const App: React.FC = () => {
       )}
       
       {isPaused && (
-        <div className="absolute inset-0 bg-brown/90 backdrop-blur-xl z-50 flex items-center justify-center animate-in fade-in duration-300 p-6">
-          <div className="bg-white p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col items-center w-full max-w-xs md:max-w-sm border border-white/20 scale-in">
+        <div className="absolute inset-0 bg-navy/90 backdrop-blur-xl z-50 flex items-center justify-center animate-in fade-in duration-300 p-6">
+          <div className="bg-cream p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col items-center w-full max-w-xs md:max-w-sm border border-white/20 scale-in text-brown">
              <span className="font-bold text-xl md:text-2xl text-brown mb-8 md:mb-12 tracking-[0.3em] uppercase opacity-90">Paused</span>
              <button 
                 onClick={() => setIsPaused(false)} 
-                className="w-full bg-gold text-brown font-bold py-4 md:py-5 rounded-2xl hover:brightness-105 hover:shadow-lg active:scale-95 transition-all duration-300 mb-4 md:mb-5 flex items-center justify-center gap-3 shadow-lg shadow-gold/20 text-sm md:text-base"
+                className="w-full bg-gold text-white font-bold py-4 md:py-5 rounded-2xl hover:bg-[#b0733d] hover:shadow-lg active:scale-95 transition-all duration-300 mb-4 md:mb-5 flex items-center justify-center gap-3 shadow-lg shadow-gold/20 text-sm md:text-base"
              >
                <Play size={20} className="fill-current" /> RESUME
              </button>
              <button 
                 onClick={startGame} 
-                className="w-full bg-brown text-cream font-bold py-4 md:py-5 rounded-2xl hover:brightness-110 hover:shadow-xl active:scale-95 transition-all duration-300 mb-4 md:mb-5 flex items-center justify-center gap-3 shadow-xl shadow-brown/20 text-sm md:text-base"
+                className="w-full bg-brown text-cream font-bold py-4 md:py-5 rounded-2xl hover:bg-[#3d1812] hover:shadow-xl active:scale-95 transition-all duration-300 mb-4 md:mb-5 flex items-center justify-center gap-3 shadow-xl shadow-brown/25 text-sm md:text-base"
              >
                <RotateCcw size={18} /> RESTART
              </button>
              <button 
                 onClick={() => { setGameState(GameState.MENU); setIsPaused(false); }} 
-                className="w-full bg-cream text-brown font-bold py-4 md:py-5 rounded-2xl hover:bg-brown/5 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3 border border-brown/10 text-sm md:text-base"
+                className="w-full bg-transparent text-brown hover:bg-brown/10 font-bold py-4 md:py-5 rounded-2xl active:scale-95 transition-all duration-300 flex items-center justify-center gap-3 border border-brown/20 text-sm md:text-base"
              >
                <Home size={16} /> HOME
              </button>

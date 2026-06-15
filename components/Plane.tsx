@@ -27,12 +27,12 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExplodin
         transition: isLanding ? 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' : 'none'
       }}
     >
-      {/* Explosion & Fire Effect */}
+       {/* Explosion & Fire Effect */}
       {isExploding && (
         <div className="absolute inset-0 flex items-center justify-center z-50">
            {/* Flash */}
            <div className="absolute w-16 h-16 bg-white rounded-full opacity-90 animate-[ping_0.2s_ease-out_1]" />
-           <div className="absolute w-20 h-20 border-4 border-gold rounded-full opacity-0 animate-[ping_0.4s_cubic-bezier(0,0,0.2,1)_1]" />
+           <div className="absolute w-20 h-20 border-4 border-[#c8854a] rounded-full opacity-0 animate-[ping_0.4s_cubic-bezier(0,0,0.2,1)_1]" />
            
            {/* Fire Particles */}
            {[...Array(12)].map((_, i) => (
@@ -73,15 +73,15 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExplodin
                transform: 'rotate(135deg)', 
                transformOrigin: 'center',
                fill: '#fffdfa',
-               stroke: '#e6b17e',
+               stroke: '#c8854a',
                strokeWidth: '1px'
              }}
            />
         </div>
 
-        {!isLanding && (
+         {!isLanding && (
           <div className="mt-4 z-20">
-            <div className="bg-brown text-gold font-bold px-5 py-2 rounded-xl text-xl shadow-2xl border-2 border-gold/20 tracking-[0.2em]">
+            <div className="bg-[#4a2018] text-[#c8854a] font-bold px-5 py-2 rounded-xl text-xl shadow-2xl border-2 border-[#c8854a]/30 tracking-[0.2em]">
               {coordinateToString(target).toUpperCase()}
             </div>
           </div>
@@ -90,7 +90,7 @@ const Plane: React.FC<PlaneProps> = ({ target, progress, landingDest, isExplodin
       
       {/* Speed Lines */}
       {!isLanding && !isExploding && (
-        <div className="w-1 h-20 bg-gradient-to-t from-gold to-transparent -mt-12 opacity-30 rounded-full"></div>
+        <div className="w-1 h-20 bg-gradient-to-t from-[#c8854a] to-transparent -mt-12 opacity-30 rounded-full"></div>
       )}
     </div>
   );
