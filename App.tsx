@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Plane as PlaneIcon, CheckCircle2, Volume2, VolumeX, Home } from 'lucide-react';
+import { Play, RotateCcw, Trophy, Zap, Clock, Pause, CheckCircle2, Volume2, VolumeX, Home } from 'lucide-react';
 import { GameState, Coordinate, GameStats, MoveHistory, Difficulty } from './types';
 import { MAIN_DURATION, getRandomCoordinate, coordinateToString, DIFFICULTY_SETTINGS } from './constants';
 import ChessBoard from './components/ChessBoard';
+import GameBackground from './components/GameBackground';
+import MenuModal from './components/MenuModal';
 import { getCoachFeedback } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -529,44 +531,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-navy overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-[#071527] overflow-hidden">
       
-      {/* Chessboard Texture Background */}
-      <div 
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `conic-gradient(rgba(253, 240, 228, 0.04) 90deg, transparent 90deg 180deg, rgba(253, 240, 228, 0.04) 180deg 270deg, transparent 270deg)`,
-          backgroundSize: '120px 120px',
-        }}
-      />
-
-      {/* Chess Pieces Pattern */}
-      <div 
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='50' y='100' font-size='80' fill='rgba(253,240,228,0.02)'%3E♞%3C/text%3E%3Ctext x='280' y='320' font-size='100' fill='rgba(253,240,228,0.02)'%3E♜%3C/text%3E%3Ctext x='320' y='100' font-size='60' fill='rgba(253,240,228,0.02)'%3E♟%3C/text%3E%3Ctext x='80' y='350' font-size='90' fill='rgba(253,240,228,0.02)'%3E♛%3C/text%3E%3Ctext x='200' y='220' font-size='85' fill='rgba(253,240,228,0.02)'%3E♚%3C/text%3E%3C/svg%3E")`,
-          backgroundSize: '400px 400px',
-        }}
-      />
-
-      {/* Wood Grain Texture Overlay */}
-      <div 
-        className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-20"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.005 0.1' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-
-      {/* Subtle Noise */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.015]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
-      
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-gold rounded-full opacity-[0.05] pointer-events-none blur-[120px]"></div>
-      <div className="absolute inset-0 bg-gradient-to-b from-navy via-navy to-[#1f354d] opacity-80 pointer-events-none"></div>
+      {/* Deep Blue Chessboard Sky Theme Background (Image 1) */}
+      <GameBackground />
 
       {gameState === GameState.MAIN_PLAY && renderHUD()}
 
@@ -583,40 +551,15 @@ const App: React.FC = () => {
       </div>
 
       {gameState === GameState.MENU && (
-        <div className="absolute inset-0 bg-navy/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 md:p-6 text-center animate-in fade-in zoom-in-95 duration-500 overflow-y-auto">
-          <div className="bg-cream p-6 md:p-10 rounded-[2rem] shadow-[0_24px_48px_-12px_rgba(45,74,107,0.35)] border border-white/20 max-w-md w-full transform transition-all duration-500 hover:scale-[1.01] my-auto relative overflow-hidden">
-            {/* Subtle texture inside the card */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ctext x='10' y='40' font-size='30' fill='%234a2018'%3E♞%3C/text%3E%3Ctext x='60' y='90' font-size='30' fill='%234a2018'%3E♜%3C/text%3E%3C/svg%3E")`, backgroundSize: '100px 100px' }} />
-            
-            <button onClick={() => setIsMuted(!isMuted)} className="absolute top-4 right-4 md:top-6 md:right-6 w-8 h-8 md:w-9 md:h-9 rounded-xl bg-brown/5 hover:bg-brown/10 flex items-center justify-center transition-all duration-300 border border-brown/5 hover:border-brown/20 active:scale-90 z-10">
-              {isMuted ? <VolumeX size={16} className="text-brown/30" /> : <Volume2 size={16} className="text-brown/60" />}
-            </button>
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-navy rounded-2xl mx-auto mb-4 md:mb-6 flex items-center justify-center shadow-lg shadow-navy/20 -rotate-2 hover:rotate-0 transition-transform duration-500">
-               <PlaneIcon size={28} className="text-gold md:w-8 md:h-8" />
-            </div>
-            <h1 className="text-2xl md:text-4xl font-bold text-brown mb-2 tracking-tight">Chess Coordinate Trainer</h1>
-            <p className="text-brown/60 mb-4 md:mb-6 font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-relaxed">Advanced Coordinate Mastery</p>
-            <div className="mb-4 md:mb-6">
-              <h3 className="font-bold text-brown/80 text-[10px] uppercase tracking-[0.2em] mb-2 md:mb-3">Choose Intensity</h3>
-              <div className="grid grid-cols-3 gap-2 p-1.5 bg-brown/5 rounded-[1.25rem] border border-brown/5">
-                {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-                  <button 
-                    key={d} 
-                    onClick={() => setDifficulty(d)} 
-                    className={`py-2 md:py-2.5 rounded-xl font-bold text-[10px] md:text-xs uppercase transition-all duration-300 active:scale-95 ${difficulty === d ? 'bg-gold text-white shadow-md shadow-gold/25' : 'text-brown/40 hover:text-brown/70 hover:bg-brown/5'}`}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button 
-              onClick={startGame} 
-              className="group w-full bg-gold text-cream font-bold text-sm md:text-base py-4 md:py-5 rounded-xl shadow-xl shadow-gold/25 hover:bg-[#b0733d] hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3"
-            >
-              <Play size={18} className="fill-current group-hover:translate-x-1 transition-transform" /> START PLAYING
-            </button>
-          </div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 animate-in fade-in zoom-in-95 duration-300 overflow-y-auto">
+          <MenuModal
+            difficulty={difficulty}
+            setDifficulty={setDifficulty}
+            isMuted={isMuted}
+            setIsMuted={setIsMuted}
+            onStart={startGame}
+            highScore={highScore}
+          />
         </div>
       )}
 
