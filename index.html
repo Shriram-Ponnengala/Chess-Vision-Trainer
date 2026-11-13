@@ -3,49 +3,52 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chess Coordinate Trainer</title>
+    <title>Venture Chess Academy — Coordinate Trainer</title>
+    <meta name="description" content="Venture Chess Academy Coordinate Trainer — Small Steps. Big Players. Master chessboard coordinates with clean, structured practice." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: {
-              brown: '#4a2018',     // Brand Dark Brown
-              gold: '#c8854a',      // Brand Caramel
-              cream: '#fdf0e4',     // Brand Cream
-              navy: '#2d4a6b',      // Brand Navy Blue
-              white: '#ffffff',
+              navy: '#2D4A6B',      // Primary Anchor: Trust & Focus
+              cream: '#FDF0E4',     // Primary Light Background
+              darkbrown: '#4A2018', // Primary Text, Linework & Dark Squares
+              caramel: '#C8854A',   // Warm Supporting Accent
+              gold: '#FFD447',      // Suggested Accent: Score, hooks & highlights
+              actionred: '#E94B35', // Danger, tactical threats & errors
+              brown: '#4A2018',     // Alias for darkbrown
+              surface: '#FFFBF6',   // Soft white for cards
             },
             fontFamily: {
-              sans: ['Outfit', 'Plus Jakarta Sans', 'Inter', 'sans-serif'],
+              sans: ['Outfit', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+              display: ['Outfit', 'sans-serif'],
+              body: ['Plus Jakarta Sans', 'sans-serif'],
             },
             animation: {
-              'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
-              'pulse-gold': 'pulse-gold 2s infinite',
-              'float': 'float 3s ease-in-out infinite',
-              'scale-in': 'scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              'shake': 'shake 0.22s cubic-bezier(.36,.07,.19,.97) both',
+              'scale-in': 'scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              'feedback-pulse': 'pulse-feedback 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards',
             },
             keyframes: {
               shake: {
-                '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
-                '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
-                '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
-                '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
-              },
-              'pulse-gold': {
-                '0%, 100%': { boxShadow: '0 0 0 0 rgba(230, 177, 126, 0.7)' },
-                '50%': { boxShadow: '0 0 0 10px rgba(230, 177, 126, 0)' }
-              },
-              float: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-5px)' },
+                '0%, 100%': { transform: 'translate3d(0, 0, 0)' },
+                '20%': { transform: 'translate3d(-2px, 0, 0)' },
+                '40%': { transform: 'translate3d(2px, 0, 0)' },
+                '60%': { transform: 'translate3d(-1px, 0, 0)' },
+                '80%': { transform: 'translate3d(1px, 0, 0)' }
               },
               'scale-in': {
-                '0%': { transform: 'scale(0.8)', opacity: '0' },
+                '0%': { transform: 'scale(0.92)', opacity: '0' },
                 '100%': { transform: 'scale(1)', opacity: '1' }
+              },
+              'pulse-feedback': {
+                '0%': { transform: 'scale(0.96)' },
+                '50%': { transform: 'scale(1.04)' },
+                '100%': { transform: 'scale(1)' }
               }
             }
           },
@@ -53,19 +56,19 @@
       }
     </script>
     <style>
-      /* Custom scrollbar to match theme */
+      /* Clean, brand-focused scrollbars */
       ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #fdf0e4;
+        background: #FDF0E4;
       }
       ::-webkit-scrollbar-thumb {
-        background: #c8854a;
+        background: #C8854A;
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #4a2018;
+        background: #4A2018;
       }
       /* Clean, flat, coach-grade UI */
       .ui-panel {
@@ -74,91 +77,57 @@
         border: 2px solid #c8854a;
       }
       
-      /* Screen Shake & Pulse Animations */
+      /* Subtle Screen Shake & Feedback */
       @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        33% { transform: translateX(-6px); }
-        66% { transform: translateX(6px); }
+        0%, 100% { transform: translate3d(0, 0, 0); }
+        20% { transform: translate3d(-2px, 0, 0); }
+        40% { transform: translate3d(2px, 0, 0); }
+        60% { transform: translate3d(-1px, 0, 0); }
+        80% { transform: translate3d(1px, 0, 0); }
       }
       .shake-effect {
-        animation: shake 0.20s cubic-bezier(.36,.07,.19,.97) both;
+        animation: shake 0.22s cubic-bezier(.36,.07,.19,.97) both;
       }
       
-      @keyframes pulse-feedback {
-        0% { transform: scale(0.95); opacity: 1; }
-        50% { transform: scale(1.05); opacity: 1; }
-        100% { transform: scale(1); opacity: 1; }
-      }
+      /* Clean square feedback */
       .animate-feedback {
-        animation: pulse-feedback 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation: pulse-feedback 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
-
+      
       @keyframes pulse-learn {
-        0% { transform: scale(1); opacity: 0.5; }
-        100% { transform: scale(1.08); opacity: 1; filter: brightness(1.1); }
+        0% { transform: scale(1); }
+        100% { transform: scale(1.05); }
       }
       .animate-learn {
-        animation: pulse-learn 0.2s ease-in-out infinite alternate;
+        animation: pulse-learn 0.3s ease-in-out infinite alternate;
         z-index: 10;
-        border: 3px solid #ffaa55 !important;
+        box-shadow: 0 0 0 3px #C8854A inset !important;
       }
 
-      /* Enhanced Streak Styles */
-      @keyframes glow-caramel {
-        0%, 100% {
-          box-shadow: 0 0 4px 1px rgba(200, 133, 74, 0.3);
-          border-color: rgba(200, 133, 74, 0.4);
+      /* Gamey score pop animation on earning points */
+      @keyframes score-pop {
+        0% {
+          transform: scale(1);
+          color: #FFD447;
         }
-        50% {
-          box-shadow: 0 0 16px 6px rgba(200, 133, 74, 0.85);
-          border-color: rgba(200, 133, 74, 0.9);
+        35% {
+          transform: scale(1.35);
+          color: #FFF3B0;
+          text-shadow: 0 0 12px rgba(255, 212, 71, 0.75);
+        }
+        70% {
+          transform: scale(0.96);
+        }
+        100% {
+          transform: scale(1);
+          color: #FFD447;
+          text-shadow: none;
         }
       }
-      .glow-caramel-aura {
-        animation: glow-caramel 1.4s infinite ease-in-out;
-      }
-
-      @keyframes fire-flicker {
-        0%, 100% { transform: scale(1) rotate(-2deg); filter: brightness(0.95); }
-        50% { transform: scale(1.2, 0.85) rotate(3deg); filter: brightness(1.3); }
-      }
-      .flame-orange {
-        animation: fire-flicker 0.22s infinite ease-in-out alternate;
-        transform-origin: bottom center;
-      }
-      .flame-blue {
-        animation: fire-flicker 0.16s infinite ease-in-out alternate;
-        transform-origin: bottom center;
-      }
-
-      @keyframes subtle-vibrate {
-        0%, 100% { transform: translate(0, 0); }
-        20% { transform: translate(-1.5px, 0.5px); }
-        40% { transform: translate(1px, -1.5px); }
-        60% { transform: translate(-1px, -1px); }
-        80% { transform: translate(1.5px, 1px); }
-      }
-      .animate-subtle-shake {
-        animation: subtle-vibrate 0.12s infinite linear;
-      }
-
-      @keyframes golden-shimmer {
-        0% { background-position: -200% 0; }
-        100% { background-position: 200% 0; }
-      }
-      .shimmer-gold-bar {
-        position: relative;
-        overflow: hidden;
-      }
-      .shimmer-gold-bar::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(90deg, transparent, rgba(200, 133, 74, 0.15) 35%, rgba(253, 240, 228, 0.3) 50%, rgba(200, 133, 74, 0.15) 65%, transparent);
-        background-size: 200% 100%;
-        animation: golden-shimmer 3.5s infinite linear;
-        pointer-events: none;
-        z-index: 10;
+      .animate-score-pop {
+        display: inline-block;
+        transform-origin: center;
+        animation: score-pop 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
     </style>
   <script type="importmap">
@@ -167,7 +136,6 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0"
   }
 }

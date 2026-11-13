@@ -21,15 +21,13 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
   isLanding = false,
   isExploding = false
 }) => {
-  // State for floating texts (+5 / -5)
+  // State for floating score feedback (+5 / -5)
   const [floatingAlert, setFloatingAlert] = useState<{ x: number; y: number; text: string; isSuccess: boolean } | null>(null);
-  
-  // State for wrong clicked particles
-  const [wrongClickParticles, setWrongClickParticles] = useState<{ x: number, y: number } | null>(null);
   
   const getSquareColor = (fileIndex: number, rankIndex: number) => {
     const isDark = (fileIndex + rankIndex) % 2 !== 0;
-    return isDark ? 'bg-[#551e19]' : 'bg-white';
+    // Brand Manual: Navy (#2D4A6B) for dark squares, Cream (#FDF0E4) for light squares
+    return isDark ? 'bg-[#2D4A6B]' : 'bg-[#FDF0E4]';
   };
 
   const getTargetPosition = (coord: Coordinate) => {
@@ -41,12 +39,9 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     };
   };
 
-  // Triggers whenever lastResult is reported
   useEffect(() => {
     if (lastResult) {
       const pos = getTargetPosition(lastResult.coord);
-      
-      // Spawn floating alert text
       setFloatingAlert({
         x: pos.x,
         y: pos.y,
@@ -54,15 +49,9 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         isSuccess: lastResult.success
       });
       
-      // If wrongful touch, spawn orange-red spark particles on that square
-      if (!lastResult.success) {
-        setWrongClickParticles(pos);
-      }
-      
       const timer = setTimeout(() => {
         setFloatingAlert(null);
-        setWrongClickParticles(null);
-      }, 750);
+      }, 650);
       
       return () => clearTimeout(timer);
     }
@@ -89,36 +78,33 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
     
     if (isTapped) {
       return { 
-        backgroundColor: lastResult.success ? '#4CAF50' : '#e53935',
-        borderColor: lastResult.success ? '#4CAF50' : '#e53935',
+        backgroundColor: lastResult.success ? '#22C55E' : '#E94B35',
+        borderColor: lastResult.success ? '#16A34A' : '#DC2626',
       };
     }
     if (!lastResult.success && isCorrectTarget) {
       return { 
-        backgroundColor: '#c8854a',
-        borderColor: '#c8854a',
+        backgroundColor: '#C8854A',
+        borderColor: '#C8854A',
       };
     }
     return {};
   };
 
-  // Optimized visibility for mobile
-  const labelClasses = "flex-1 text-center font-extrabold text-[#fdf0e4]/90 text-[10px] md:text-sm uppercase tracking-wider";
-  const rankLabelClasses = "flex items-center justify-center font-extrabold text-[#fdf0e4]/90 text-[10px] md:text-sm tracking-wider w-5 md:w-8";
+  // High contrast typography for labels against Cream background (#FDF0E4)
+  const labelClasses = "flex-1 text-center font-black text-[#4A2018] text-xs md:text-sm uppercase tracking-widest";
+  const rankLabelClasses = "flex items-center justify-center font-black text-[#4A2018] text-xs md:text-sm tracking-widest w-5 md:w-8";
   
-  // Layout constants
   const sideLabelWidth = "w-5 md:w-8"; 
-  const gapSize = "gap-1 md:gap-3"; 
+  const gapSize = "gap-1 md:gap-2"; 
 
   return (
-    // Responsive container using min() logic for constraints to fit landscape/portrait mobile
-    // Applies 'shake-effect' when isExploding is active for wrong squares
-    <div className={`flex flex-col items-center justify-center w-full max-w-[min(90vw,60vh)] md:max-w-[540px] animate-in fade-in zoom-in-98 duration-700 ${isExploding ? 'shake-effect' : ''}`}>
+    <div className={`flex flex-col items-center justify-center w-full max-w-[min(92vw,56vh)] md:max-w-[500px] animate-in fade-in duration-300 ${isExploding ? 'shake-effect' : ''}`}>
       
-      {/* Top Section: Spacer + Files + Spacer */}
-      <div className={`flex items-end justify-center w-full mb-1 md:mb-2 ${gapSize}`}>
+      {/* Top Files (a-h) */}
+      <div className={`flex items-end justify-center w-full mb-1 ${gapSize}`}>
          <div className={`${sideLabelWidth} shrink-0`} />
-         <div className="flex-1 flex px-1 md:px-[12px] shrink-0">
+         <div className="flex-1 flex px-1 md:px-2 shrink-0">
             {FILES.map((file) => (
               <div key={`top-${file}`} className={labelClasses}>
                 {file}
@@ -128,11 +114,11 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
          <div className={`${sideLabelWidth} shrink-0`} />
       </div>
 
-      {/* Middle Section: Ranks + Board + Ranks */}
+      {/* Ranks (1-8) + Board Grid */}
       <div className={`flex items-stretch justify-center w-full ${gapSize}`}>
         
         {/* Left Ranks */}
-        <div className={`grid grid-rows-8 py-1 md:py-[12px] ${sideLabelWidth} shrink-0`}>
+        <div className={`grid grid-rows-8 py-1 md:py-2 ${sideLabelWidth} shrink-0`}>
           {RANKS.map((rank) => (
             <div key={`left-${rank}`} className={rankLabelClasses}>
               {rank}
@@ -141,7 +127,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
 
         {/* The Board Grid */}
-        <div className="flex-1 aspect-square grid grid-cols-8 shadow-[0_24px_48px_-12px_rgba(85,30,25,0.5)] border-4 md:border-[12px] border-[#551e19] rounded-[1rem] md:rounded-[2.5rem] overflow-hidden bg-[#551e19] relative shrink-0">
+        <div className="flex-1 aspect-square grid grid-cols-8 shadow-[0_16px_40px_rgba(45,74,107,0.18),0_4px_12px_rgba(74,32,24,0.08)] border-4 md:border-8 border-[#4A2018] rounded-2xl md:rounded-3xl overflow-hidden bg-[#2D4A6B] relative shrink-0">
           
           {RANKS.map((rank, rankIndex) => (
             <React.Fragment key={rank}>
@@ -149,9 +135,11 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                 const coordString = `${file}${rank}`;
                 const fClass = getFeedbackClass(file, rank);
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={coordString}
                     onClick={() => onSquareClick({ file, rank })}
+                    aria-label={`Square ${file}${rank}`}
                     className={`
                       relative flex items-center justify-center cursor-pointer 
                       active:scale-95 transition-all duration-150 ease-out 
@@ -159,70 +147,31 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                       ${fClass}
                     `}
                     style={getFeedbackStyle(file, rank)}
-                  >
-                  </div>
+                  />
                 );
               })}
             </React.Fragment>
           ))}
 
-          {/* Floating alert overlay */}
+          {/* Floating score indicator */}
           {floatingAlert && (
             <motion.div
-              initial={{ y: 10, opacity: 1, scale: 0.8 }}
-              animate={{ y: -45, opacity: 0, scale: 1.2 }}
-              transition={{ duration: 0.7, ease: 'easeOut' }}
-              className="absolute select-none pointer-events-none z-30 font-extrabold text-xl md:text-3xl drop-shadow-lg"
+              initial={{ y: 5, opacity: 1, scale: 0.85 }}
+              animate={{ y: -35, opacity: 0, scale: 1.15 }}
+              transition={{ duration: 0.55, ease: 'easeOut' }}
+              className={`absolute select-none pointer-events-none z-30 font-black text-xl md:text-2xl px-2.5 py-0.5 rounded-lg shadow-md ${
+                floatingAlert.isSuccess 
+                  ? 'bg-[#22C55E] text-white border border-[#16A34A]' 
+                  : 'bg-[#E94B35] text-white border border-[#DC2626]'
+              }`}
               style={{
                 left: `${floatingAlert.x}%`,
                 top: `${floatingAlert.y}%`,
                 transform: 'translate(-50%, -50%)',
-                color: floatingAlert.isSuccess ? '#4CAF50' : '#e53935',
-                textShadow: '0px 0px 4px rgba(255,255,255,0.95), 0px 0px 8px rgba(0,0,0,0.6)',
               }}
             >
               {floatingAlert.text}
             </motion.div>
-          )}
-
-          {/* Spark Particles Burst on Wrong Selection */}
-          {wrongClickParticles && (
-            <div 
-              className="absolute pointer-events-none z-30"
-              style={{
-                left: `${wrongClickParticles.x}%`,
-                top: `${wrongClickParticles.y}%`,
-                transform: 'translate(-50%, -50%)',
-              }}
-            >
-              {[...Array(12)].map((_, i) => {
-                const angle = (i * 360) / 12 + Math.random() * 15;
-                const radians = (angle * Math.PI) / 180;
-                const distance = 40 + Math.random() * 30; // pixels to fly
-                const toX = Math.cos(radians) * distance;
-                const toY = Math.sin(radians) * distance;
-                
-                return (
-                  <motion.div
-                    key={i}
-                    initial={{ scale: 1, opacity: 1, x: 0, y: 0 }}
-                    animate={{ 
-                      scale: [1, 1.4, 0],
-                      opacity: [1, 0.9, 0],
-                      x: toX,
-                      y: toY,
-                    }}
-                    transition={{ duration: 0.5, ease: "easeOut" }}
-                    className={`absolute w-2 h-2 rounded-full ${
-                      i % 2 === 0 ? 'bg-[#ff5522]' : 'bg-[#ff9900]'
-                    } blur-[1px]`}
-                    style={{
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                  />
-                );
-              })}
-            </div>
           )}
 
           {/* Overlay: Plane & Flight Path */}
@@ -235,17 +184,17 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                     y1={`${planeProgress}%`}
                     x2={`${getTargetPosition(activeTarget).x}%`}
                     y2={`${getTargetPosition(activeTarget).y}%`}
-                    stroke="#c8854a"
-                    strokeWidth="4"
+                    stroke="#C8854A"
+                    strokeWidth="3"
+                    strokeDasharray="4 4"
                     strokeLinecap="round"
-                    className="opacity-90 drop-shadow-md animate-in fade-in duration-300"
+                    className="opacity-80"
                   />
                   <circle 
                     cx={`${getTargetPosition(activeTarget).x}%`}
                     cy={`${getTargetPosition(activeTarget).y}%`}
-                    r="6"
-                    fill="#c8854a"
-                    className="animate-pulse"
+                    r="5"
+                    fill="#C8854A"
                   />
                 </svg>
               )}
@@ -262,7 +211,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
         
         {/* Right Ranks */}
-        <div className={`grid grid-rows-8 py-1 md:py-[12px] ${sideLabelWidth} shrink-0`}>
+        <div className={`grid grid-rows-8 py-1 md:py-2 ${sideLabelWidth} shrink-0`}>
           {RANKS.map((rank) => (
             <div key={`right-${rank}`} className={rankLabelClasses}>
               {rank}
@@ -271,10 +220,10 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         </div>
       </div>
 
-      {/* Bottom Section: Spacer + Files + Spacer */}
-      <div className={`flex items-start justify-center w-full mt-1 md:mt-2 ${gapSize}`}>
+      {/* Bottom Files (a-h) */}
+      <div className={`flex items-start justify-center w-full mt-1 ${gapSize}`}>
          <div className={`${sideLabelWidth} shrink-0`} />
-         <div className="flex-1 flex px-1 md:px-[12px] shrink-0">
+         <div className="flex-1 flex px-1 md:px-2 shrink-0">
             {FILES.map((file) => (
               <div key={`bottom-${file}`} className={labelClasses}>
                 {file}
@@ -283,8 +232,6 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
          </div>
          <div className={`${sideLabelWidth} shrink-0`} />
       </div>
-
-      <div className="h-4 md:h-6"></div>
     </div>
   );
 };

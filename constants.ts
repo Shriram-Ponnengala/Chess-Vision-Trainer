@@ -5,10 +5,15 @@ export const FILES: File[] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 export const RANKS: Rank[] = [8, 7, 6, 5, 4, 3, 2, 1]; // Visual order top-down
 
 export const COLORS = {
-  brown: '#551e19', // Primary
-  gold: '#e6b17e',  // Secondary
-  cream: '#f7d5b4', // Background
-  white: '#ffffff', // Neutral
+  navy: '#2D4A6B',       // Primary Anchor
+  cream: '#FDF0E4',      // Primary Light Background
+  darkBrown: '#4A2018',  // Primary Text & Linework
+  caramel: '#C8854A',    // Warm Supporting Accent
+  goldenYellow: '#FFD447',// High Attention / Score Accent
+  actionRed: '#E94B35',  // Tactical / Error / Danger Accent
+  white: '#ffffff',
+  brown: '#4A2018',      // Backward compatibility
+  gold: '#C8854A',       // Backward compatibility
 };
 
 // Durations in seconds
