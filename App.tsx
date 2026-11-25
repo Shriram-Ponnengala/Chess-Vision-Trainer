@@ -364,11 +364,6 @@ const App: React.FC = () => {
           Start training
         </Button>
 
-        <div className="flex items-center justify-center gap-2 rounded-2xl bg-surface px-4 py-3 text-sm shadow-sm ring-1 ring-line">
-          <Trophy size={16} className="text-hint" />
-          <span className="text-muted">Your best</span>
-          <span className="font-semibold tabular-nums">{highScore > 0 ? `${highScore} points` : 'No score yet'}</span>
-        </div>
         <p className="text-center text-xs text-muted">Press Enter to start · Space pauses</p>
       </div>
     </div>
