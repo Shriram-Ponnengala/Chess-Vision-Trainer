@@ -1,684 +1,614 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'motion/react';
-import { Play, RotateCcw, Trophy, Zap, Clock, Pause, Volume2, VolumeX, Home, Sparkles, Award } from 'lucide-react';
-import { GameState, Coordinate, GameStats, MoveHistory, Difficulty } from './types';
-import { MAIN_DURATION, getRandomCoordinate, DIFFICULTY_SETTINGS } from './constants';
-import ChessBoard from './components/ChessBoard';
-import GameBackground from './components/GameBackground';
-import MenuModal from './components/MenuModal';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Home, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, Star } from 'lucide-react';
+import { GameState, type Coordinate, type GameStats, type MoveHistory, type Difficulty } from './types';
+import { MAIN_DURATION, DIFFICULTY_SETTINGS, getRandomCoordinate, coordinateToString } from './constants';
+import Board, { type DropStatus, type PointsChip, type SquareMark } from './components/Board';
+import { Brand, Button, Card, IconButton, Meter, Stat, ThemeToggle } from './components/ui';
 import { getCoachFeedback } from './services/geminiService';
+import { playSound, type Sound } from './services/sound';
+
+const EMPTY_STATS: GameStats = { score: 0, streak: 0, maxStreak: 0, hits: 0, misses: 0, totalSpawns: 0 };
+
+const PACES: { value: Difficulty; name: string; help: string; icon: string }[] = [
+  { value: 'easy', name: 'Easy', help: 'Slow fall', icon: '🐢' },
+  { value: 'medium', name: 'Medium', help: 'Standard', icon: '🐇' },
+  { value: 'hard', name: 'Hard', help: 'Fast reflex', icon: '⚡' },
+];
+
+function stored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const v = localStorage.getItem(key);
+  return (allowed as readonly string[]).includes(v ?? '') ? (v as T) : fallback;
+}
+
+const accuracyOf = (s: GameStats) => Math.round((s.hits / (s.hits + s.misses || 1)) * 100);
+
+function starsFor(s: GameStats) {
+  const acc = accuracyOf(s);
+  if (s.hits >= 10 && acc >= 90) return 3;
+  if (s.hits >= 5 && acc >= 70) return 2;
+  return s.hits > 0 ? 1 : 0;
+}
+const TITLES = ['Keep practising!', 'Good effort!', 'Well done!', 'Brilliant!'];
 
 const App: React.FC = () => {
-  // State
-  const [gameState, setGameState] = useState<GameState>(GameState.MENU);
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [stats, setStats] = useState<GameStats>({
-    score: 0,
-    streak: 0,
-    maxStreak: 0,
-    hits: 0,
-    misses: 0,
-    totalSpawns: 0,
-  });
-  const [history, setHistory] = useState<MoveHistory[]>([]);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [coachFeedback, setCoachFeedback] = useState<string>('');
-  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [lastRunAccuracy, setLastRunAccuracy] = useState<number | null>(null);
-  const [highScore, setHighScore] = useState<number>(() => {
-    const saved = localStorage.getItem('chessCoordinateTrainerHighScore');
-    return saved ? parseInt(saved, 10) : 0;
-  });
-  const [isNewPersonalBest, setIsNewPersonalBest] = useState(false);
+  // Settings, remembered on this device.
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => stored('cvt-pace', ['easy', 'medium', 'hard'], 'medium'));
+  const [muted, setMuted] = useState(() => localStorage.getItem('cvt-muted') === '1');
+  useEffect(() => localStorage.setItem('cvt-pace', difficulty), [difficulty]);
+  useEffect(() => localStorage.setItem('cvt-muted', muted ? '1' : '0'), [muted]);
 
-  // Gameplay State
-  const [activeTarget, setActiveTarget] = useState<Coordinate | null>(null);
-  const [planeProgress, setPlaneProgress] = useState(0); // 0 to 100
-  const [lastResult, setLastResult] = useState<{ coord: Coordinate; success: boolean } | null>(null);
-  const [isLanding, setIsLanding] = useState(false);
-  const [isExploding, setIsExploding] = useState(false);
+  const [phase, setPhase] = useState<GameState>(GameState.MENU);
+  const [paused, setPaused] = useState(false);
+  const [stats, setStatsState] = useState<GameStats>(EMPTY_STATS);
+  const [timeLeft, setTimeLeft] = useState(MAIN_DURATION);
+  const [drop, setDrop] = useState<{ id: number; target: Coordinate; progress: number; status: DropStatus; dest?: Coordinate } | null>(null);
+  const [marks, setMarks] = useState<Record<string, SquareMark>>({});
+  const [points, setPoints] = useState<PointsChip | null>(null);
+  const [burstId, setBurstId] = useState(0);
+  const [shakeId, setShakeId] = useState(0);
+  const [streakNote, setStreakNote] = useState<string | null>(null);
 
-  // Refs for loops and audio
-  const requestRef = useRef<number>(undefined);
-  const lastTimeRef = useRef<number>(0);
-  const spawnTimeRef = useRef<number>(0);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10) || 0);
+  const [isNewBest, setIsNewBest] = useState(false);
+  const [missed, setMissed] = useState<string[]>([]);
+  const [coachFeedback, setCoachFeedback] = useState('');
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
 
-  // --- Sound Playback (Synthesized via Web Audio API) ---
-  const playSound = useCallback((type: 'correct' | 'wrong' | 'milestone' | 'plane_drop' | 'heartbeat' | 'game_over' | 'personal_best') => {
-    if (isMuted) return;
-    
-    let ctx = audioContextRef.current;
-    if (!ctx) {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        ctx = new AudioContextClass();
-        audioContextRef.current = ctx;
-      }
-    }
-    
-    if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume();
+  // The game loop reads these refs, never state, so it always sees the latest values.
+  const statsRef = useRef(EMPTY_STATS);
+  const historyRef = useRef<MoveHistory[]>([]);
+  const dropRef = useRef<typeof drop>(null);
+  const timeRef = useRef(MAIN_DURATION);
+  const pausedRef = useRef(false);
+  const mutedRef = useRef(muted);
+  const spawnAtRef = useRef(0);
+  const dropIdRef = useRef(0);
+  const sessionRef = useRef(0);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  mutedRef.current = muted;
+  pausedRef.current = paused;
 
-    const now = ctx.currentTime;
+  const sound = useCallback((s: Sound) => {
+    if (!mutedRef.current) playSound(s);
+  }, []);
 
-    if (type === 'correct') {
-      // Two-note ascending chime (C5 → E5)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(523.25, now);
-      gain1.gain.setValueAtTime(0, now);
-      gain1.gain.linearRampToValueAtTime(0.06, now + 0.015);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.1);
-
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(659.25, now + 0.1);
-      gain2.gain.setValueAtTime(0, now + 0.1);
-      gain2.gain.linearRampToValueAtTime(0.06, now + 0.115);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.1);
-      osc2.stop(now + 0.2);
-    } 
-    else if (type === 'wrong') {
-      // Soft low tone (160Hz)
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(160, now);
-
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.05, now + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.18);
-    } 
-    else if (type === 'milestone') {
-      // Ascending fanfare
-      const duration = 0.08;
-      const freqs = [523.25, 659.25, 783.99];
-      freqs.forEach((freq, idx) => {
-        const time = now + idx * duration;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, time);
-        gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.06, time + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + duration);
-      });
-    } 
-    else if (type === 'plane_drop') {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(700, now);
-      osc.frequency.exponentialRampToValueAtTime(450, now + 0.25);
-
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.03, now + 0.04);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    } 
-    else if (type === 'heartbeat') {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(65, now);
-
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.1, now + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.1);
-    } 
-    else if (type === 'game_over') {
-      const duration = 0.15;
-      const freqs = [783.99, 659.25, 523.25, 261.63];
-      freqs.forEach((freq, idx) => {
-        const time = now + idx * duration;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, time);
-        gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.06, time + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration + 0.05);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + duration + 0.05);
-      });
-    } 
-    else if (type === 'personal_best') {
-      const duration = 0.1;
-      const freqs = [523.25, 659.25, 783.99, 1046.50];
-      freqs.forEach((freq, idx) => {
-        const time = now + idx * duration;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, time);
-        gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.07, time + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration + 0.1);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + duration + 0.1);
-      });
-    }
-  }, [isMuted]);
-
-  // --- Game Loop Logic ---
-
-  const spawnPlane = useCallback(() => {
-    setActiveTarget(getRandomCoordinate());
-    setPlaneProgress(0);
-    spawnTimeRef.current = Date.now();
-    setStats(prev => ({ ...prev, totalSpawns: prev.totalSpawns + 1 }));
-    playSound('plane_drop');
-  }, [playSound]);
-
-  const handleMiss = useCallback(() => {
-    setStats(prev => ({
-      ...prev,
-      misses: prev.misses + 1,
-      streak: 0,
-    }));
-    setLastResult(null); 
-    setIsLanding(false);
-    
-    if (activeTarget) {
-      setHistory(prev => [...prev, {
-        target: activeTarget,
-        wasCorrect: false,
-        timeTakenMs: Date.now() - spawnTimeRef.current,
-        phase: 'main'
-      }]);
-    }
-
-    setTimeout(() => {
-      if (gameState === GameState.MAIN_PLAY) spawnPlane();
-    }, DIFFICULTY_SETTINGS[difficulty].spawnDelay);
-  }, [activeTarget, gameState, spawnPlane, difficulty]);
-
-  const updateGame = useCallback((timestamp: number) => {
-    if (!lastTimeRef.current) lastTimeRef.current = timestamp;
-    const deltaTime = timestamp - lastTimeRef.current;
-    lastTimeRef.current = timestamp;
-
-    if (isPaused || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) {
-      requestRef.current = requestAnimationFrame(updateGame);
-      return;
-    }
-
-    const config = DIFFICULTY_SETTINGS[difficulty];
-    const timeElapsed = MAIN_DURATION - timeLeft;
-    const speed = (config.baseSpeed + (timeElapsed / MAIN_DURATION) * config.speedScaling) * (deltaTime / 16.67);
-    
-    setPlaneProgress(prev => {
-      const next = prev + speed;
-      if (next >= 105) { 
-        handleMiss();
-        return 0;
-      }
-      return next;
-    });
-
-    requestRef.current = requestAnimationFrame(updateGame);
-  }, [gameState, timeLeft, handleMiss, isPaused, isLanding, isExploding, difficulty]);
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (!isPaused && gameState === GameState.MAIN_PLAY) {
-      interval = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 11 && prev > 1) {
-            playSound('heartbeat');
-          }
-          if (prev <= 1) {
-            endGame();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [gameState, isPaused, playSound]);
-
-  useEffect(() => {
-    requestRef.current = requestAnimationFrame(updateGame);
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    };
-  }, [gameState, updateGame]);
-
-  const endGame = async () => {
-    setGameState(GameState.SUMMARY);
-    setIsLoadingFeedback(true);
-    const accuracy = Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100);
-    const storedAccuracy = localStorage.getItem('lastRunAccuracy');
-    if (storedAccuracy) setLastRunAccuracy(parseInt(storedAccuracy, 10));
-    localStorage.setItem('lastRunAccuracy', accuracy.toString());
-
-    // Personal Best Achievement Check
-    const currentHighScore = parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10);
-    const isNewBest = stats.score > currentHighScore;
-    if (isNewBest) {
-      localStorage.setItem('chessCoordinateTrainerHighScore', stats.score.toString());
-      setHighScore(stats.score);
-      setIsNewPersonalBest(true);
-      playSound('personal_best');
-    } else {
-      setIsNewPersonalBest(false);
-      playSound('game_over');
-    }
-
-    const feedback = await getCoachFeedback(history, stats.score, accuracy);
-    setCoachFeedback(feedback);
-    setIsLoadingFeedback(false);
+  const setStats = (fn: (s: GameStats) => GameStats) => {
+    statsRef.current = fn(statsRef.current);
+    setStatsState(statsRef.current);
+  };
+  const setDropBoth = (d: typeof drop) => {
+    dropRef.current = d;
+    setDrop(d);
+  };
+  const later = (fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timers.current.delete(id);
+      fn();
+    }, ms);
+    timers.current.add(id);
+  };
+  const clearTimers = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current.clear();
   };
 
-  const handleSquareClick = (coord: Coordinate) => {
-    if (isPaused || !activeTarget || gameState !== GameState.MAIN_PLAY || isLanding || isExploding) return;
+  const record = (target: Coordinate, wasCorrect: boolean) => {
+    historyRef.current.push({ target, wasCorrect, timeTakenMs: Date.now() - spawnAtRef.current, phase: 'main' });
+  };
 
-    const isCorrect = coord.file === activeTarget.file && coord.rank === activeTarget.rank;
-    const reactionTime = Date.now() - spawnTimeRef.current;
+  const spawn = () => {
+    const prev = dropRef.current?.target;
+    let target = getRandomCoordinate();
+    while (prev && target.file === prev.file && target.rank === prev.rank) target = getRandomCoordinate();
+    setMarks({});
+    setDropBoth({ id: ++dropIdRef.current, target, progress: 0, status: 'falling' });
+    spawnAtRef.current = Date.now();
+    setStats((s) => ({ ...s, totalSpawns: s.totalSpawns + 1 }));
+    sound('drop');
+  };
 
-    setLastResult({ coord, success: isCorrect });
-    setTimeout(() => setLastResult(null), 400);
+  const delay = () => DIFFICULTY_SETTINGS[difficulty].spawnDelay;
 
-    if (isCorrect) {
-      const newStreak = stats.streak + 1;
-      if (newStreak % 5 === 0) {
-        playSound('milestone');
-      } else {
-        playSound('correct');
-      }
+  // The token reached the bottom: show where it was, then the next one.
+  const timeOut = () => {
+    const d = dropRef.current;
+    if (!d) return;
+    setStats((s) => ({ ...s, misses: s.misses + 1, streak: 0 }));
+    record(d.target, false);
+    setDropBoth({ ...d, progress: 100, status: 'crash' });
+    setMarks({ [coordinateToString(d.target)]: 'answer' });
+    sound('boom');
+    later(spawn, 900 + delay());
+  };
 
-      setStats(prev => {
-        const nextStreak = prev.streak + 1;
-        let pointsToAdd = 5;
-        if (nextStreak % 5 === 0) pointsToAdd += 10;
-        return {
-          ...prev,
-          score: prev.score + pointsToAdd,
-          streak: nextStreak,
-          maxStreak: Math.max(prev.maxStreak, nextStreak),
-          hits: prev.hits + 1,
-        };
-      });
+  const onSquare = (coord: Coordinate) => {
+    const d = dropRef.current;
+    if (phase !== GameState.MAIN_PLAY || pausedRef.current || !d || d.status !== 'falling') return;
+    const tapped = coordinateToString(coord);
+    const wanted = coordinateToString(d.target);
 
-      setHistory(prev => [...prev, {
-        target: activeTarget,
-        wasCorrect: true,
-        timeTakenMs: reactionTime,
-        phase: 'main'
-      }]);
-
-      setIsLanding(true);
-      setTimeout(() => {
-        setIsLanding(false);
-        spawnPlane();
-      }, 350 + DIFFICULTY_SETTINGS[difficulty].spawnDelay);
-    } else {
-      playSound('wrong');
-      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-        try {
-          navigator.vibrate(20);
-        } catch (_) {}
-      }
-      setIsExploding(true);
-      
-      setStats(prev => ({
-        ...prev,
-        score: Math.max(0, prev.score - 5),
-        streak: 0,
-        misses: prev.misses + 1,
+    if (tapped === wanted) {
+      const streak = statsRef.current.streak + 1;
+      const milestone = streak % 5 === 0;
+      const gained = milestone ? 15 : 5;
+      setStats((s) => ({
+        ...s,
+        score: s.score + gained,
+        streak,
+        maxStreak: Math.max(s.maxStreak, streak),
+        hits: s.hits + 1,
       }));
-
-      setHistory(prev => [...prev, {
-        target: activeTarget,
-        wasCorrect: false,
-        timeTakenMs: reactionTime,
-        phase: 'main'
-      }]);
-
-      setTimeout(() => {
-        setIsExploding(false);
-        spawnPlane();
-      }, 400 + DIFFICULTY_SETTINGS[difficulty].spawnDelay);
+      record(d.target, true);
+      setMarks({ [tapped]: 'hit' });
+      setPoints({ id: Date.now(), coord, text: `+${gained}`, good: true });
+      setDropBoth({ ...d, status: 'landing' });
+      if (milestone) {
+        setBurstId((b) => b + 1);
+        setStreakNote(`🔥 ${streak} in a row! +10 bonus`);
+        later(() => setStreakNote(null), 2200);
+        sound('milestone');
+      } else {
+        sound('correct');
+      }
+      later(spawn, 380 + delay());
+    } else {
+      setStats((s) => ({ ...s, score: Math.max(0, s.score - 5), streak: 0, misses: s.misses + 1 }));
+      record(d.target, false);
+      setMarks({ [tapped]: 'miss', [wanted]: 'answer' });
+      setPoints({ id: Date.now(), coord, text: '−5', good: false });
+      // The plane flies to the wrong square and explodes there; the board shakes as it hits.
+      setDropBoth({ ...d, status: 'crash', dest: coord });
+      later(() => {
+        setShakeId((n) => n + 1);
+        sound('boom');
+      }, 280);
+      sound('wrong');
+      try {
+        navigator.vibrate?.(20);
+      } catch {
+        /* not supported */
+      }
+      later(spawn, 1150 + delay());
     }
+  };
+
+  const endGame = () => {
+    clearTimers();
+    const session = sessionRef.current;
+    const s = statsRef.current;
+    setPhase(GameState.SUMMARY);
+    setPaused(false);
+    setDropBoth(null);
+    setMarks({});
+    setStreakNote(null);
+
+    const missedSquares = [...new Set(historyRef.current.filter((h) => !h.wasCorrect).map((h) => coordinateToString(h.target)))];
+    setMissed(missedSquares);
+
+    const best = parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10) || 0;
+    const newBest = s.score > best;
+    setIsNewBest(newBest);
+    if (newBest) {
+      localStorage.setItem('chessCoordinateTrainerHighScore', String(s.score));
+      setHighScore(s.score);
+      sound('personal_best');
+    } else {
+      sound('game_over');
+    }
+
+    setCoachFeedback('');
+    setLoadingFeedback(true);
+    getCoachFeedback(historyRef.current, s.score, accuracyOf(s)).then((text) => {
+      if (sessionRef.current !== session) return; // a new game started meanwhile
+      setCoachFeedback(text);
+      setLoadingFeedback(false);
+    });
   };
 
   const startGame = () => {
-    setStats({
-      score: 0,
-      streak: 0,
-      maxStreak: 0,
-      hits: 0,
-      misses: 0,
-      totalSpawns: 0,
-    });
-    setHistory([]);
-    setCoachFeedback('');
-    setIsPaused(false);
-    setIsLanding(false);
-    setIsExploding(false);
-    setLastResult(null);
-    setLastRunAccuracy(null);
-    lastTimeRef.current = 0;
-    
-    setGameState(GameState.MAIN_PLAY);
+    clearTimers();
+    sessionRef.current++;
+    statsRef.current = EMPTY_STATS;
+    setStatsState(EMPTY_STATS);
+    historyRef.current = [];
+    timeRef.current = MAIN_DURATION;
     setTimeLeft(MAIN_DURATION);
-    spawnPlane();
+    setPaused(false);
+    setPoints(null);
+    setStreakNote(null);
+    setPhase(GameState.MAIN_PLAY);
+    spawn();
   };
 
-  // --- Render Clean HUD (VCA Brand) ---
-  const renderHUD = () => {
-    const timePercent = (timeLeft / MAIN_DURATION) * 100;
-    const isCriticalTime = timeLeft <= 10;
+  const goMenu = () => {
+    clearTimers();
+    sessionRef.current++;
+    setPhase(GameState.MENU);
+    setPaused(false);
+    setDropBoth(null);
+    setMarks({});
+    setPoints(null);
+    setStreakNote(null);
+  };
 
-    return (
-      <header className="w-full fixed top-0 left-0 right-0 z-40 flex flex-col items-center pointer-events-none">
-        <div className="w-full bg-[#2D4A6B] text-white shadow-md border-b border-[#C8854A]/30 py-2.5 px-4 md:px-8 pointer-events-auto">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-3 md:gap-6">
-            
-            {/* Zone 1: Brand & Exit Action */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={() => setGameState(GameState.MENU)}
-                title="Return to Menu"
-                className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-white/10 hover:bg-white/20 text-[#FDF0E4] flex items-center justify-center transition-all duration-150 active:scale-95"
-              >
-                <Home size={16} />
-              </button>
-              <div className="hidden sm:block text-left">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#FFD447] block leading-none">
-                  Venture Chess Academy
-                </span>
-                <span className="text-[9px] font-medium text-white/70 tracking-wide block mt-0.5">
-                  Small Steps. Big Players.
-                </span>
-              </div>
-            </div>
+  // The fall: one frame at a time, faster as the minute goes on.
+  useEffect(() => {
+    if (phase !== GameState.MAIN_PLAY) return;
+    let raf = 0;
+    let last = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min(now - last, 50); // no jump after a background tab
+      last = now;
+      const d = dropRef.current;
+      if (!pausedRef.current && d && d.status === 'falling') {
+        const cfg = DIFFICULTY_SETTINGS[difficulty];
+        const elapsed = MAIN_DURATION - timeRef.current;
+        const step = (cfg.baseSpeed + (elapsed / MAIN_DURATION) * cfg.speedScaling) * (dt / 16.67);
+        const progress = d.progress + step;
+        if (progress >= 100) timeOut();
+        else setDropBoth({ ...d, progress });
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, difficulty]);
 
-            {/* Zone 2: Three Clean Metric Controls */}
-            <div className="flex items-center gap-4 sm:gap-8">
-              {/* Score */}
-              <div className="flex flex-col items-center min-w-[55px] sm:min-w-[70px]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                  Score
-                </span>
-                <span
-                  key={stats.hits}
-                  className={`text-xl sm:text-2xl font-black text-[#FFD447] tabular-nums leading-tight ${stats.hits > 0 ? 'animate-score-pop' : ''}`}
+  // The clock.
+  useEffect(() => {
+    if (phase !== GameState.MAIN_PLAY || paused) return;
+    const id = setInterval(() => {
+      timeRef.current -= 1;
+      setTimeLeft(timeRef.current);
+      if (timeRef.current <= 0) endGame();
+      else if (timeRef.current <= 10) sound('tick');
+    }, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, paused]);
+
+  // Space or P pauses; Enter starts from the menu or the results.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (phase === GameState.MAIN_PLAY && (e.key === ' ' || e.key === 'p' || e.key === 'Escape')) {
+        e.preventDefault();
+        setPaused((p) => !p);
+      } else if (phase !== GameState.MAIN_PLAY && e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
+        startGame();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Leaving the tab mid-game pauses it.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.hidden && phase === GameState.MAIN_PLAY) setPaused(true);
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [phase]);
+
+  useEffect(() => () => clearTimers(), []);
+
+  const playing = phase === GameState.MAIN_PLAY;
+  const accuracy = accuracyOf(stats);
+  const critical = timeLeft <= 10;
+
+  // ───────────── Side panels ─────────────
+
+  // The home screen: its own page before the game, the board only appears once you press Start.
+  const homeScreen = (
+    <div className="fade-in mx-auto grid w-full max-w-5xl items-center gap-5 px-4 py-4 sm:gap-6 sm:py-6 lg:grid-cols-[1fr_24rem] lg:gap-10 lg:py-10">
+      {/* Hero: a little board with a square falling into it, the title and what the game is. */}
+      <div className="flex flex-col items-center gap-4 text-center sm:gap-5 lg:items-start lg:text-left">
+        <div className="mini-board" aria-hidden>
+          <Board disabled drop={{ id: 0, target: { file: 'e', rank: 4 }, progress: 30, status: 'falling' }} marks={{ e4: 'answer' }} />
+        </div>
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-accent uppercase">Speed drill · 60 seconds</p>
+          <h1 className="mt-1 font-brand text-[2rem] leading-tight font-semibold sm:text-5xl">Coordinate Trainer</h1>
+          <p className="mt-1.5 max-w-md text-[0.95rem] leading-relaxed text-muted sm:mt-2 sm:text-base">
+            A square name falls down the board. Tap that square before it reaches the bottom. Learn every square by sight.
+          </p>
+        </div>
+        <ul className="hidden w-full max-w-md grid-cols-2 gap-x-4 gap-y-1.5 text-left text-sm text-muted sm:grid">
+          {[
+            ['✅', 'Right square: +5'],
+            ['🔥', '5 in a row: +10'],
+            ['❌', 'Wrong square: −5'],
+            ['⏳', 'Too slow: streak resets'],
+          ].map(([icon, text]) => (
+            <li key={text} className="flex items-center gap-2">
+              <span aria-hidden className="w-5 text-center">{icon}</span>
+              {text}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Settings and Start. */}
+      <div className="flex w-full flex-col gap-3">
+        <Card>
+          <p className="mb-2.5 text-xs font-semibold tracking-wide text-muted uppercase">Choose your pace</p>
+          <div role="radiogroup" aria-label="Pace" className="grid grid-cols-3 gap-2">
+            {PACES.map((p) => {
+              const on = p.value === difficulty;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setDifficulty(p.value)}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-3 transition active:scale-[0.97] ${
+                    on ? 'bg-accent-soft ring-2 ring-accent' : 'bg-surface-2 ring-1 ring-transparent hover:ring-line'
+                  }`}
                 >
-                  {stats.score}
-                </span>
-              </div>
-
-              {/* Streak */}
-              <div className="flex flex-col items-center min-w-[55px] sm:min-w-[70px]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                  Streak
-                </span>
-                <div className="flex items-center gap-1">
-                  <Zap size={14} className={stats.streak >= 5 ? 'text-[#FFD447] fill-[#FFD447]' : 'text-white/40'} />
-                  <span className={`text-xl sm:text-2xl font-black tabular-nums leading-tight ${stats.streak >= 5 ? 'text-[#FFD447]' : 'text-white'}`}>
-                    {stats.streak}
+                  <span aria-hidden className="text-2xl leading-none">
+                    {p.icon}
                   </span>
-                </div>
-              </div>
-
-              {/* Time Remaining */}
-              <div className="flex flex-col items-center min-w-[55px] sm:min-w-[70px]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                  Time
-                </span>
-                <div className="flex items-center gap-1">
-                  <Clock size={14} className={isCriticalTime ? 'text-[#E94B35]' : 'text-white/70'} />
-                  <span className={`text-xl sm:text-2xl font-black tabular-nums leading-tight ${isCriticalTime ? 'text-[#E94B35] animate-pulse' : 'text-white'}`}>
-                    {timeLeft}s
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Zone 3: Interactive Controls (Mute / Pause) */}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setIsMuted(!isMuted)}
-                title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
-                className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-white/10 hover:bg-white/20 text-[#FDF0E4] flex items-center justify-center transition-all duration-150 active:scale-95"
-              >
-                {isMuted ? <VolumeX size={16} className="text-white/50" /> : <Volume2 size={16} />}
-              </button>
-
-              <button 
-                onClick={() => setIsPaused(!isPaused)}
-                title={isPaused ? 'Resume Session' : 'Pause Session'}
-                className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-white/10 hover:bg-white/20 text-[#FDF0E4] flex items-center justify-center transition-all duration-150 active:scale-95"
-              >
-                {isPaused ? <Play size={16} className="fill-current" /> : <Pause size={16} className="fill-current" />}
-              </button>
-            </div>
-
+                  <span className={`mt-1 text-[0.95rem] font-semibold ${on ? 'text-accent' : ''}`}>{p.name}</span>
+                  <span className="text-[0.7rem] text-muted">{p.help}</span>
+                </button>
+              );
+            })}
           </div>
+
+        </Card>
+
+        <Button variant="primary" size="lg" onClick={startGame} className="w-full">
+          <Play size={20} className="fill-current" />
+          Start training
+        </Button>
+
+        <div className="flex items-center justify-center gap-2 rounded-2xl bg-surface px-4 py-3 text-sm shadow-sm ring-1 ring-line">
+          <Trophy size={16} className="text-hint" />
+          <span className="text-muted">Your best</span>
+          <span className="font-semibold tabular-nums">{highScore > 0 ? `${highScore} points` : 'No score yet'}</span>
         </div>
-        
-        {/* Clean Progress Line (Caramel #C8854A) */}
-        <div className="w-full h-1 bg-[#2D4A6B]/30">
-          <div 
-            className="h-full bg-[#C8854A] transition-all duration-1000 ease-linear"
-            style={{ width: `${timePercent}%` }}
-          />
+        <p className="text-center text-xs text-muted">Press Enter to start · Space pauses</p>
+      </div>
+    </div>
+  );
+
+  const fallLeft = drop ? Math.max(0, 100 - drop.progress) : 0;
+  const playPanel = (
+    <>
+      {/* What to find: big, so it reads from across the room. Hidden on phones (the token says it). */}
+      <Card className="hidden text-center xl:block">
+        <p className="text-xs font-semibold tracking-wide text-muted uppercase">Find</p>
+        <p key={drop?.id} className="pop-in font-brand text-6xl leading-tight font-semibold">
+          {drop ? coordinateToString(drop.target) : '–'}
+        </p>
+        <div className="mx-auto mt-2 max-w-[12rem]">
+          <Meter value={drop?.status === 'falling' ? fallLeft : 0} tone={fallLeft < 25 ? 'danger' : 'hint'} />
         </div>
-      </header>
-    );
-  };
+      </Card>
+
+      <Card className="p-3.5">
+        <div className="flex items-start">
+          <Stat label="Score" value={stats.score} tone="accent" bumpKey={stats.hits || undefined} />
+          <Stat label="Streak" value={stats.streak >= 5 ? `🔥${stats.streak}` : stats.streak} tone={stats.streak >= 5 ? 'hint' : undefined} />
+          <Stat label="Accuracy" value={stats.hits + stats.misses ? `${accuracy}%` : '–'} />
+          <Stat label="Time" value={`${timeLeft}s`} tone={critical ? 'danger' : undefined} />
+        </div>
+        <div className="mt-3">
+          <Meter value={(timeLeft / MAIN_DURATION) * 100} tone={critical ? 'danger' : 'accent'} />
+        </div>
+      </Card>
+
+      {streakNote && (
+        <p key={streakNote} className="pop-in rounded-2xl bg-accent-soft px-4 py-2.5 text-center font-semibold text-accent" aria-live="polite">
+          {streakNote}
+        </p>
+      )}
+
+      <div className="hidden gap-2 xl:flex">
+        <Button onClick={() => setPaused((p) => !p)} className="flex-1" disabled={!playing}>
+          {paused ? <Play size={16} className="fill-current" /> : <Pause size={16} className="fill-current" />}
+          {paused ? 'Resume' : 'Pause'}
+        </Button>
+        <Button variant="ghost" onClick={goMenu}>
+          End
+        </Button>
+      </div>
+      <p className="hidden px-1 text-xs text-muted xl:block">Space pauses · Leaving the tab pauses too</p>
+    </>
+  );
+
+  // ───────────── Page ─────────────
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative font-sans bg-[#FDF0E4] text-[#4A2018] overflow-hidden select-none">
-      
-      {/* Serene Academy Canvas (Mode B: Educational) */}
-      <GameBackground />
-
-      {/* In-Game Navigation & Metric HUD */}
-      {gameState === GameState.MAIN_PLAY && renderHUD()}
-
-      {/* Centerpiece: Chessboard Container */}
-      <main className={`relative z-10 pt-16 md:pt-20 pb-4 flex-1 flex flex-col justify-center items-center w-full max-w-[620px] px-3 h-full transition-opacity duration-300 ${gameState === GameState.MENU ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <ChessBoard 
-          onSquareClick={handleSquareClick}
-          activeTarget={activeTarget}
-          lastResult={lastResult}
-          planeProgress={gameState === GameState.MAIN_PLAY && !isPaused ? planeProgress : undefined}
-          isLanding={isLanding}
-          isExploding={isExploding}
-        />
-      </main>
-
-      {/* Menu / Welcome Modal */}
-      {gameState === GameState.MENU && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-y-auto">
-          <MenuModal
-            difficulty={difficulty}
-            setDifficulty={setDifficulty}
-            isMuted={isMuted}
-            setIsMuted={setIsMuted}
-            onStart={startGame}
-            highScore={highScore}
-          />
+    <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none">
+      <header className="sticky top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-center bg-bg/85 px-2 py-2 backdrop-blur sm:px-4">
+        <div className="flex items-center">
+          {phase !== GameState.MENU && (
+            <IconButton label="Back to menu" onClick={goMenu}>
+              <Home size={18} />
+            </IconButton>
+          )}
         </div>
-      )}
+        <Brand />
+        <div className="flex items-center justify-end">
+          {playing && (
+            <IconButton label={paused ? 'Resume' : 'Pause'} onClick={() => setPaused((p) => !p)}>
+              {paused ? <Play size={18} /> : <Pause size={18} />}
+            </IconButton>
+          )}
+          <IconButton label={muted ? 'Sound off' : 'Sound on'} onClick={() => setMuted((m) => !m)}>
+            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </IconButton>
+          {/* Phones: no room for it next to Pause while playing. */}
+          <span className={playing ? 'hidden sm:contents' : 'contents'}>
+            <ThemeToggle />
+          </span>
+        </div>
+      </header>
 
-      {/* Summary / Report Modal */}
-      {gameState === GameState.SUMMARY && (
-        <div className="absolute inset-0 bg-[#2D4A6B]/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white text-[#4A2018] p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full mx-auto border border-[#4A2018]/10 relative text-center z-10">
-            
-            {/* Top Brand Tag */}
-            <div className="text-[11px] font-extrabold uppercase tracking-widest text-[#2D4A6B] mb-1">
-              Venture Chess Academy
-            </div>
-            <div className="text-[10px] font-semibold text-[#C8854A] mb-4">
-              Small Steps. Big Players.
-            </div>
+      {phase === GameState.MENU ? (
+        <main className="flex flex-1 flex-col justify-center">{homeScreen}</main>
+      ) : (
+        <main className="flex flex-1 flex-col items-center justify-center gap-4 pb-4 xl:flex-row xl:items-start xl:justify-center xl:gap-6 xl:px-6 xl:pt-4">
+          <div className="relative">
+            <Board
+              onSquare={onSquare}
+              disabled={!playing || paused}
+              drop={playing && drop ? drop : null}
+              marks={marks}
+              points={playing ? points : null}
+              burstId={burstId}
+              shakeId={shakeId}
+              paused={paused}
+            />
 
-            <h2 className="text-2xl sm:text-3xl font-black text-[#2D4A6B] tracking-tight">
-              Session Complete
-            </h2>
-
-            {/* Personal Best Ribbon */}
-            {isNewPersonalBest && (
-              <div className="inline-flex items-center gap-1.5 bg-[#FFD447]/20 text-[#4A2018] font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider my-3 border border-[#FFD447]">
-                <Award size={14} className="text-[#C8854A]" />
-                New Academy Record!
+            {paused && playing && (
+              <div className="fade-in absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+                <div className="wd-card flex w-full max-w-xs flex-col items-center gap-3 rounded-2xl bg-surface p-6 text-center shadow-xl ring-1 ring-line">
+                  <p className="font-brand text-2xl font-semibold">Paused</p>
+                  <p className="-mt-1 text-sm text-muted">
+                    {stats.score} points · {timeLeft}s left
+                  </p>
+                  <Button variant="primary" onClick={() => setPaused(false)} className="w-full">
+                    <Play size={16} className="fill-current" /> Resume
+                  </Button>
+                  <Button onClick={startGame} className="w-full">
+                    <RotateCcw size={16} /> Restart
+                  </Button>
+                  <Button variant="ghost" onClick={goMenu} className="w-full">
+                    Back to menu
+                  </Button>
+                </div>
               </div>
             )}
-
-            {/* Score Showcase */}
-            <div className="my-5 py-4 bg-[#FDF0E4] rounded-2xl border border-[#C8854A]/20">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#4A2018]/60 block mb-1">
-                Final Score
-              </span>
-              <span className="text-5xl sm:text-6xl font-black text-[#2D4A6B] tabular-nums tracking-tight">
-                {stats.score}
-              </span>
-            </div>
-
-            {/* Performance Metrics Strip */}
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              <div className="bg-[#FAF2EA] p-2.5 rounded-xl border border-[#4A2018]/5">
-                <span className="text-[10px] font-semibold text-[#4A2018]/60 block">Accuracy</span>
-                <span className="text-base font-extrabold text-[#2D4A6B] tabular-nums">
-                  {Math.round((stats.hits / (stats.hits + stats.misses || 1)) * 100)}%
-                </span>
-              </div>
-              <div className="bg-[#FAF2EA] p-2.5 rounded-xl border border-[#4A2018]/5">
-                <span className="text-[10px] font-semibold text-[#4A2018]/60 block">Max Streak</span>
-                <span className="text-base font-extrabold text-[#2D4A6B] tabular-nums">
-                  {stats.maxStreak}
-                </span>
-              </div>
-              <div className="bg-[#FAF2EA] p-2.5 rounded-xl border border-[#4A2018]/5">
-                <span className="text-[10px] font-semibold text-[#4A2018]/60 block">Hits / Miss</span>
-                <span className="text-base font-extrabold text-[#2D4A6B] tabular-nums">
-                  {stats.hits}/{stats.misses}
-                </span>
-              </div>
-            </div>
-
-            {/* AI Coach Feedback Card */}
-            <div className="text-left bg-[#FDF0E4] rounded-2xl p-4 mb-6 border border-[#2D4A6B]/10">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-5 h-5 rounded-md bg-[#2D4A6B] text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
-                  ♟
-                </div>
-                <span className="text-xs font-bold text-[#2D4A6B] uppercase tracking-wide">
-                  Coach Analysis
-                </span>
-              </div>
-              <p className="text-xs text-[#4A2018]/80 leading-relaxed font-medium">
-                {isLoadingFeedback ? (
-                  <span className="italic text-[#4A2018]/50">Analyzing your session performance...</span>
-                ) : (
-                  coachFeedback || "Consistent repetition builds instinctual coordinate sight. Excellent effort!"
-                )}
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="space-y-2.5">
-              <button 
-                onClick={startGame} 
-                className="w-full bg-[#C8854A] hover:bg-[#B67338] text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-150 shadow-md shadow-[#C8854A]/25 active:scale-[0.98]"
-              >
-                <RotateCcw size={16} />
-                <span className="uppercase tracking-wider text-sm">Practice Again</span>
-              </button>
-              <button 
-                onClick={() => setGameState(GameState.MENU)} 
-                className="w-full bg-transparent hover:bg-[#FDF0E4] text-[#2D4A6B] font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-150 border border-[#2D4A6B]/20 text-sm active:scale-[0.98]"
-              >
-                <Home size={16} />
-                <span className="uppercase tracking-wider">Main Menu</span>
-              </button>
-            </div>
-
           </div>
-        </div>
+
+          <aside className="flex w-full max-w-[40rem] flex-col gap-3 px-3 xl:w-80 xl:px-0">
+            {playPanel}
+          </aside>
+        </main>
       )}
-      
-      {/* Clean Pause Modal */}
-      {isPaused && (
-        <div className="absolute inset-0 bg-[#2D4A6B]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col items-center w-full max-w-xs border border-[#4A2018]/10 text-[#4A2018]">
-            <span className="font-extrabold text-sm uppercase tracking-widest text-[#2D4A6B] mb-1">
-              Venture Chess Academy
-            </span>
-            <span className="text-2xl font-black text-[#4A2018] mb-6">
-              Session Paused
-            </span>
-            
-            <button 
-              onClick={() => setIsPaused(false)} 
-              className="w-full bg-[#C8854A] hover:bg-[#B67338] text-white font-bold py-3 rounded-xl transition-all duration-150 mb-3 flex items-center justify-center gap-2 shadow-md shadow-[#C8854A]/25"
-            >
-              <Play size={16} className="fill-current" />
-              <span className="uppercase tracking-wide text-xs">Resume</span>
-            </button>
-            <button 
-              onClick={startGame} 
-              className="w-full bg-[#2D4A6B] hover:bg-[#233A53] text-white font-bold py-3 rounded-xl transition-all duration-150 mb-3 flex items-center justify-center gap-2"
-            >
-              <RotateCcw size={16} />
-              <span className="uppercase tracking-wide text-xs">Restart</span>
-            </button>
-            <button 
-              onClick={() => { setGameState(GameState.MENU); setIsPaused(false); }} 
-              className="w-full bg-transparent hover:bg-[#FDF0E4] text-[#2D4A6B] font-bold py-3 rounded-xl transition-all duration-150 flex items-center justify-center gap-2 border border-[#2D4A6B]/20 text-xs"
-            >
-              <Home size={16} />
-              <span className="uppercase tracking-wide">Main Menu</span>
-            </button>
-          </div>
-        </div>
+
+      {phase === GameState.SUMMARY && (
+        <Summary
+          stats={stats}
+          isNewBest={isNewBest}
+          highScore={highScore}
+          missed={missed}
+          coachFeedback={coachFeedback}
+          loadingFeedback={loadingFeedback}
+          difficulty={difficulty}
+          onAgain={startGame}
+          onMenu={goMenu}
+        />
       )}
     </div>
   );
 };
+
+function Summary({
+  stats,
+  isNewBest,
+  highScore,
+  missed,
+  coachFeedback,
+  loadingFeedback,
+  difficulty,
+  onAgain,
+  onMenu,
+}: {
+  stats: GameStats;
+  isNewBest: boolean;
+  highScore: number;
+  missed: string[];
+  coachFeedback: string;
+  loadingFeedback: boolean;
+  difficulty: Difficulty;
+  onAgain: () => void;
+  onMenu: () => void;
+}) {
+  const stars = starsFor(stats);
+  const pace = PACES.find((p) => p.value === difficulty)!.name;
+  const items = [
+    { label: 'Accuracy', value: `${accuracyOf(stats)}%` },
+    { label: 'Best streak', value: stats.maxStreak },
+    { label: 'Right / wrong', value: `${stats.hits} / ${stats.misses}` },
+  ];
+  return (
+    <div className="fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]">
+      <div role="dialog" aria-label="Results" className="wd-card w-full max-w-md rounded-3xl bg-surface p-6 text-center shadow-2xl ring-1 ring-line sm:p-7">
+        <div className="flex justify-center gap-2" aria-label={`${stars} of 3 stars`}>
+          {[0, 1, 2].map((i) => (
+            <Star
+              key={i}
+              size={i === 1 ? 52 : 40}
+              className={`wd-star ${i === 1 ? '-mt-2' : 'mt-1'} ${i < stars ? 'fill-[#f5c518] text-[#e0a800]' : 'fill-progress-off text-progress-off'}`}
+              style={{ animationDelay: `${0.25 + i * 0.15}s` }}
+            />
+          ))}
+        </div>
+
+        <h2 className="wd-title mt-3 font-brand text-3xl font-semibold">{TITLES[stars]}</h2>
+        <p className="mt-0.5 text-sm text-muted">{pace} pace · 60 seconds</p>
+
+        {isNewBest && (
+          <p className="pop-in mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-hint-soft px-3 py-1 text-sm font-semibold text-hint">
+            <Trophy size={15} /> New personal best!
+          </p>
+        )}
+
+        <div className="wd-stat mt-4 rounded-2xl bg-surface-2 py-4" style={{ animationDelay: '0.35s' }}>
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">Score</p>
+          <p className="font-brand text-6xl leading-none font-semibold text-accent tabular-nums">{stats.score}</p>
+          {!isNewBest && highScore > 0 && <p className="mt-1 text-xs text-muted">Best: {highScore}</p>}
+        </div>
+
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {items.map((it, i) => (
+            <div key={it.label} className="wd-stat rounded-xl bg-surface-2 px-2 py-2.5" style={{ animationDelay: `${0.45 + i * 0.08}s` }}>
+              <p className="text-[0.7rem] text-muted">{it.label}</p>
+              <p className="text-lg font-semibold tabular-nums">{it.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {missed.length > 0 && (
+          <div className="mt-4 text-left">
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Squares to practise</p>
+            <div className="flex flex-wrap gap-1.5">
+              {missed.slice(0, 16).map((sq) => (
+                <span key={sq} className="rounded-full bg-danger-soft px-2.5 py-0.5 font-brand text-sm font-semibold text-danger">
+                  {sq}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 rounded-2xl border border-[#f5c518]/40 bg-hint-soft px-4 py-3 text-left">
+          <p className="mb-0.5 text-xs font-semibold tracking-wide text-hint uppercase">♞ Coach's note</p>
+          <p className="text-[0.95rem] leading-relaxed">
+            {loadingFeedback ? (
+              <span className="text-muted italic">Looking at your session…</span>
+            ) : (
+              coachFeedback || 'Every round makes the board feel smaller. Keep going!'
+            )}
+          </p>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-2">
+          <Button variant="primary" size="lg" onClick={onAgain} className="w-full">
+            <RotateCcw size={18} /> Play again
+          </Button>
+          <Button variant="ghost" onClick={onMenu} className="w-full">
+            Home
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default App;

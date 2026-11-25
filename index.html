@@ -2,148 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Venture Chess Academy — Coordinate Trainer</title>
-    <meta name="description" content="Venture Chess Academy Coordinate Trainer — Small Steps. Big Players. Master chessboard coordinates with clean, structured practice." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Coordinate Trainer · Venture Chess Academy</title>
+    <meta name="description" content="Coordinate Trainer by Venture Chess Academy: learn every square of the chessboard by sight." />
+    <meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161512" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&display=swap" rel="stylesheet" />
+    <!-- Light, Dark or Device, applied before the first paint so the page never flashes. -->
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              navy: '#2D4A6B',      // Primary Anchor: Trust & Focus
-              cream: '#FDF0E4',     // Primary Light Background
-              darkbrown: '#4A2018', // Primary Text, Linework & Dark Squares
-              caramel: '#C8854A',   // Warm Supporting Accent
-              gold: '#FFD447',      // Suggested Accent: Score, hooks & highlights
-              actionred: '#E94B35', // Danger, tactical threats & errors
-              brown: '#4A2018',     // Alias for darkbrown
-              surface: '#FFFBF6',   // Soft white for cards
-            },
-            fontFamily: {
-              sans: ['Outfit', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
-              display: ['Outfit', 'sans-serif'],
-              body: ['Plus Jakarta Sans', 'sans-serif'],
-            },
-            animation: {
-              'shake': 'shake 0.22s cubic-bezier(.36,.07,.19,.97) both',
-              'scale-in': 'scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              'feedback-pulse': 'pulse-feedback 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-            },
-            keyframes: {
-              shake: {
-                '0%, 100%': { transform: 'translate3d(0, 0, 0)' },
-                '20%': { transform: 'translate3d(-2px, 0, 0)' },
-                '40%': { transform: 'translate3d(2px, 0, 0)' },
-                '60%': { transform: 'translate3d(-1px, 0, 0)' },
-                '80%': { transform: 'translate3d(1px, 0, 0)' }
-              },
-              'scale-in': {
-                '0%': { transform: 'scale(0.92)', opacity: '0' },
-                '100%': { transform: 'scale(1)', opacity: '1' }
-              },
-              'pulse-feedback': {
-                '0%': { transform: 'scale(0.96)' },
-                '50%': { transform: 'scale(1.04)' },
-                '100%': { transform: 'scale(1)' }
-              }
-            }
-          },
-        },
-      }
+      try {
+        var t = localStorage.getItem('cvt-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
     </script>
-    <style>
-      /* Clean, brand-focused scrollbars */
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #FDF0E4;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #C8854A;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #4A2018;
-      }
-      /* Clean, flat, coach-grade UI */
-      .ui-panel {
-        background: #4a2018;
-        color: #fdf0e4;
-        border: 2px solid #c8854a;
-      }
-      
-      /* Subtle Screen Shake & Feedback */
-      @keyframes shake {
-        0%, 100% { transform: translate3d(0, 0, 0); }
-        20% { transform: translate3d(-2px, 0, 0); }
-        40% { transform: translate3d(2px, 0, 0); }
-        60% { transform: translate3d(-1px, 0, 0); }
-        80% { transform: translate3d(1px, 0, 0); }
-      }
-      .shake-effect {
-        animation: shake 0.22s cubic-bezier(.36,.07,.19,.97) both;
-      }
-      
-      /* Clean square feedback */
-      .animate-feedback {
-        animation: pulse-feedback 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-      
-      @keyframes pulse-learn {
-        0% { transform: scale(1); }
-        100% { transform: scale(1.05); }
-      }
-      .animate-learn {
-        animation: pulse-learn 0.3s ease-in-out infinite alternate;
-        z-index: 10;
-        box-shadow: 0 0 0 3px #C8854A inset !important;
-      }
-
-      /* Gamey score pop animation on earning points */
-      @keyframes score-pop {
-        0% {
-          transform: scale(1);
-          color: #FFD447;
-        }
-        35% {
-          transform: scale(1.35);
-          color: #FFF3B0;
-          text-shadow: 0 0 12px rgba(255, 212, 71, 0.75);
-        }
-        70% {
-          transform: scale(0.96);
-        }
-        100% {
-          transform: scale(1);
-          color: #FFD447;
-          text-shadow: none;
-        }
-      }
-      .animate-score-pop {
-        display: inline-block;
-        transform-origin: center;
-        animation: score-pop 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-      }
-    </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
-  <body class="bg-cream text-brown h-[100dvh] w-screen overflow-hidden selection:bg-gold selection:text-brown font-sans flex items-center justify-center">
-    <div id="root" class="w-full h-full"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
