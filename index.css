@@ -1,0 +1,570 @@
+@import "tailwindcss";
+
+/*
+ * Theme tokens, taken from Chess OS (VCAstudio). Every colour in the app comes
+ * from here, so dark mode is one block.
+ */
+:root {
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-2: #efeae2;
+  --fg: #1f1d1a;
+  --muted: #6f6a62;
+  --line: rgb(0 0 0 / 0.1);
+  --accent: #2f7d4f;
+  --accent-strong: #256840;
+  --accent-soft: rgb(47 125 79 / 0.12);
+  --danger: #c0392b;
+  --danger-soft: rgb(192 57 43 / 0.12);
+  --hint: #b7791f;
+  --hint-soft: #fdf3dc;
+  --sq-light: #f0d9b5;
+  --sq-dark: #b58863;
+  --progress-off: #d6d0c6;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #161512;
+  --surface: #262421;
+  --surface-2: #302e2a;
+  --fg: #e8e6e3;
+  --muted: #9a958d;
+  --line: rgb(255 255 255 / 0.12);
+  --accent: #6fbf8b;
+  --accent-strong: #5aa876;
+  --accent-soft: rgb(111 191 139 / 0.14);
+  --danger: #e0645a;
+  --danger-soft: rgb(224 100 90 / 0.16);
+  --hint: #f0b44c;
+  --hint-soft: rgb(240 180 76 / 0.12);
+  --sq-light: #c9b48f;
+  --sq-dark: #8b6a4b;
+  --progress-off: #3d3a35;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #161512;
+    --surface: #262421;
+    --surface-2: #302e2a;
+    --fg: #e8e6e3;
+    --muted: #9a958d;
+    --line: rgb(255 255 255 / 0.12);
+    --accent: #6fbf8b;
+    --accent-strong: #5aa876;
+    --accent-soft: rgb(111 191 139 / 0.14);
+    --danger: #e0645a;
+    --danger-soft: rgb(224 100 90 / 0.16);
+    --hint: #f0b44c;
+    --hint-soft: rgb(240 180 76 / 0.12);
+    --sq-light: #c9b48f;
+    --sq-dark: #8b6a4b;
+    --progress-off: #3d3a35;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-hint: var(--hint);
+  --color-hint-soft: var(--hint-soft);
+  --color-progress-off: var(--progress-off);
+  --font-brand: "Fredoka", system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.011em;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (hover: none) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ───────────────────────── Board ───────────────────────── */
+
+/*
+ * Sized by both axes so landscape and a collapsing mobile address bar never
+ * push it off-screen. A 16px wood frame (1px dark edge + 15px wood) holds the
+ * coordinates; the grid fills what's inside.
+ */
+.cb-frame {
+  --board: min(100vw - 2rem, 100dvh - 15rem, 640px);
+  --frame: 15px;
+  --frame-color: #7d371d;
+  width: var(--board-size, var(--board));
+  height: var(--board-size, var(--board));
+  padding: var(--frame);
+  position: relative;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--frame-color) 35%, black);
+  /* Mahogany with a faint marble vein, lit from the top-left. */
+  background:
+    linear-gradient(115deg, transparent 38%, rgb(0 0 0 / 0.1) 39.5%, transparent 42%),
+    linear-gradient(35deg, transparent 58%, rgb(255 255 255 / 0.18) 59.5%, transparent 62%),
+    linear-gradient(160deg, transparent 18%, rgb(0 0 0 / 0.07) 21%, transparent 26%),
+    linear-gradient(75deg, transparent 72%, rgb(0 0 0 / 0.06) 74%, transparent 77%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--frame-color) 85%, white),
+      var(--frame-color) 60%,
+      color-mix(in srgb, var(--frame-color) 88%, black)
+    );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 -1px 0 rgb(0 0 0 / 0.35),
+    0 1px 2px rgb(0 0 0 / 0.25),
+    0 12px 32px -12px rgb(0 0 0 / 0.35);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (min-width: 1100px) {
+  .cb-frame {
+    --board: min(100vw - 30rem, 100dvh - 9rem, 720px);
+  }
+}
+
+@media (max-width: 599px) {
+  .cb-frame {
+    --board: min(
+      100vw - env(safe-area-inset-left) - env(safe-area-inset-right),
+      100dvh - 15rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+}
+
+.cb-board {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  overflow: hidden;
+  position: relative;
+  container-type: inline-size;
+  /* The frame's inner edge: a thin dark groove round the playing grid. */
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+}
+
+/* The little board on the home screen: a fixed size, always with its rounded frame. */
+.mini-board {
+  --board-size: min(52vw, 30dvh, 17rem);
+}
+@media (min-width: 640px) {
+  .mini-board {
+    --board-size: 17rem;
+  }
+}
+.mini-board .cb-frame {
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--frame-color) 35%, black);
+  rotate: -3deg;
+}
+.mini-board .cb-square {
+  cursor: default;
+}
+@media (min-width: 1024px) {
+  .mini-board {
+    --board-size: 20rem;
+  }
+}
+
+/* Coordinates in the frame on all four sides: ranks centred on each row, files on each column. */
+.cb-ranks,
+.cb-files {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #f6e7d3;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+.cb-ranks {
+  top: var(--frame);
+  bottom: var(--frame);
+  width: var(--frame);
+  grid-template-rows: repeat(8, 1fr);
+}
+.cb-ranks-left { left: 0; }
+.cb-ranks-right { right: 0; }
+.cb-files {
+  left: var(--frame);
+  right: var(--frame);
+  height: var(--frame);
+  grid-template-columns: repeat(8, 1fr);
+}
+.cb-files-top { top: 0; }
+.cb-files-bottom { bottom: 0; }
+
+.cb-square {
+  position: relative;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cb-square:disabled {
+  cursor: default;
+}
+.cb-square:focus,
+.cb-square:focus-visible {
+  outline: none;
+}
+.cb-light {
+  background: var(--sq-light);
+}
+.cb-dark {
+  background: var(--sq-dark);
+}
+@media (hover: hover) {
+  .cb-square:not(:disabled):hover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 0 0 0 max(2px, 0.45cqw) rgb(255 255 255 / 0.55);
+    pointer-events: none;
+  }
+}
+
+/* Square marks: right tap (green), wrong tap (red), and the square that was asked for (amber). */
+.cb-mark-hit::before,
+.cb-mark-miss::before,
+.cb-mark-answer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.cb-mark-hit::before {
+  background: rgb(47 158 79 / 0.55);
+  animation: sq-flash 0.45s ease-out;
+}
+.cb-mark-miss::before {
+  background: rgb(214 58 47 / 0.5);
+}
+.cb-mark-answer::before {
+  background: rgb(245 197 24 / 0.45);
+  box-shadow: inset 0 0 0 max(3px, 0.7cqw) #f5c518;
+  animation: sq-answer 0.5s ease-in-out infinite alternate;
+}
+@keyframes sq-flash {
+  from { opacity: 0; }
+  30% { opacity: 1; }
+}
+@keyframes sq-answer {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}
+
+/* The square's name, shown on the answer square so the student learns it. */
+.cb-label {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-brand);
+  font-weight: 600;
+  font-size: max(12px, 4cqw);
+  line-height: 1;
+  color: #2b1d10;
+  background: rgb(255 255 255 / 0.85);
+  padding: 0.18em 0.4em;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  animation: pop-in 0.22s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+/* Right tap: a tick; wrong tap: a red ✗. Both pop and fade. */
+.fx-tick,
+.fx-oops {
+  position: absolute;
+  inset: 22%;
+  z-index: 3;
+  pointer-events: none;
+}
+.fx-tick svg,
+.fx-oops svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+}
+.fx-tick svg { stroke: #fff; }
+.fx-oops svg { stroke: #dc2626; }
+.fx-tick { animation: fx-pop 0.7s ease-out forwards; }
+.fx-oops { animation: fx-pop 0.8s ease-out forwards; }
+@keyframes fx-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  25% { opacity: 1; transform: scale(1.15); }
+  40% { transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* +5 / −5 chip rising from the tapped square. */
+.fx-points {
+  position: absolute;
+  z-index: 40;
+  /* Starts above the square so the tick or ✗ on it stays visible. */
+  translate: -50% -125%;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: max(13px, 3.6cqw);
+  line-height: 1;
+  padding: 0.3em 0.6em;
+  border-radius: 999px;
+  color: #fff;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.25);
+  animation: fx-rise 0.75s ease-out forwards;
+}
+@keyframes fx-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.7); }
+  20% { opacity: 1; transform: translateY(0) scale(1.08); }
+  100% { opacity: 0; transform: translateY(-7cqw) scale(1); }
+}
+
+/* The falling plane (components/PlaneSprite.tsx), nose down, with the square name on it. */
+.drop {
+  position: absolute;
+  left: 50%;
+  z-index: 30;
+  /* A little wider than one square: big enough to read, small enough to see the board. */
+  width: max(64px, 15cqw);
+  translate: -50% -50%;
+  pointer-events: none;
+  will-change: top, left;
+}
+.plane {
+  transition: transform 0.18s ease-out;
+}
+.plane-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  /* A flat shadow on the board below, offset like the sun is top-left. */
+  filter: drop-shadow(0.9cqw 1.6cqw 0 rgb(40 20 5 / 0.22));
+}
+.drop-falling .plane-svg {
+  animation: plane-in 0.25s ease-out;
+}
+@keyframes plane-in {
+  from { transform: scale(1.2); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Right square: it flies there, then touches down (shrinks into the square) and fades. */
+.drop-landing {
+  transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1), top 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drop-landing .plane-svg {
+  animation: plane-land 0.55s ease-in 0.2s forwards;
+}
+@keyframes plane-land {
+  0% { transform: none; opacity: 1; filter: drop-shadow(0.9cqw 1.6cqw 0 rgb(40 20 5 / 0.22)); }
+  60% { transform: scale(0.5); opacity: 1; filter: drop-shadow(0 0 0 rgb(40 20 5 / 0.3)); }
+  100% { transform: scale(0.42); opacity: 0; }
+}
+
+/* Wrong square: it flies there and blows up; too slow: it blows up where it is. */
+.drop-fly {
+  transition: left 0.28s ease-in, top 0.28s ease-in;
+}
+.drop-crash .plane-svg {
+  animation: plane-gone 0.06s linear forwards;
+}
+.drop-fly .plane-svg {
+  animation-delay: 0.28s;
+}
+@keyframes plane-gone {
+  to { opacity: 0; transform: scale(1.15); }
+}
+
+.boom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.boom > * {
+  position: absolute;
+  animation-delay: var(--delay, 0s);
+  animation-fill-mode: both;
+}
+.boom-flash {
+  inset: 10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgb(255 236 150 / 0.9) 30%, rgb(255 140 40 / 0.5) 55%, transparent 72%);
+  animation: boom-flash 0.45s ease-out;
+}
+@keyframes boom-flash {
+  0% { transform: scale(0.2); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.boom-fire {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: boom-fire 0.7s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes boom-fire {
+  0% { transform: scale(0.15) rotate(0deg); opacity: 0; }
+  18% { transform: scale(1) rotate(12deg); opacity: 1; }
+  55% { transform: scale(1.05) rotate(22deg); opacity: 1; }
+  100% { transform: scale(1.25) rotate(34deg); opacity: 0; }
+}
+.boom-smoke {
+  width: 34%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(90 85 78 / 0.55);
+  left: 33%;
+  top: 33%;
+  animation: boom-smoke 1s ease-out;
+}
+.boom-smoke-0 { --sx: -40%; --sy: -60%; }
+.boom-smoke-1 { --sx: 50%; --sy: -40%; animation-duration: 1.1s; }
+.boom-smoke-2 { --sx: 5%; --sy: -85%; animation-duration: 1.2s; }
+@keyframes boom-smoke {
+  0%, 25% { transform: translate(0, 0) scale(0.3); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: translate(var(--sx), var(--sy)) scale(1.5); opacity: 0; }
+}
+.boom-bit {
+  width: 9%;
+  height: 5%;
+  border-radius: 2px;
+  left: 45.5%;
+  top: 47.5%;
+  outline: 1.5px solid #1d1a18;
+  animation: boom-bit 0.75s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+@keyframes boom-bit {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 3), calc(var(--dy) * 3)) rotate(var(--r)); opacity: 0; }
+}
+
+/* Paused: the board dims under the pause card. */
+.cb-frame[data-paused="true"] .cb-board {
+  filter: saturate(0.6) brightness(0.92);
+}
+
+/* ───────────────────────── Motion ───────────────────────── */
+
+@keyframes pop-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.pop-in {
+  animation: pop-in 0.25s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* The Well Done card: it bounces in, the stars pop one by one. */
+.wd-card {
+  animation: wd-card 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+@keyframes wd-card {
+  from { transform: translateY(26px) scale(0.86); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.wd-star {
+  animation: wd-star 0.5s cubic-bezier(0.3, 1.8, 0.5, 1) both;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.2));
+}
+@keyframes wd-star {
+  from { transform: scale(0) rotate(-120deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.wd-title {
+  animation: wd-title 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) 0.2s both;
+}
+@keyframes wd-title {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.wd-stat {
+  animation: wd-stat 0.4s ease-out both;
+}
+@keyframes wd-stat {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Streak milestone: stars burst out of the board's centre. */
+.win-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+  animation: win-burst 1s ease-out both;
+}
+@keyframes win-burst {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1.2) rotate(40deg); opacity: 0; }
+}
+
+/* Score number bump. */
+.bump {
+  animation: bump 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
