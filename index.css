@@ -66,6 +66,18 @@
   }
 }
 
+/* Tailwind's dark: classes follow the theme button (Dark), or the device when it's on Device. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -108,8 +120,11 @@ body {
  * push it off-screen. A 16px wood frame (1px dark edge + 15px wood) holds the
  * coordinates; the grid fills what's inside.
  */
-.cb-frame {
+:root {
+  /* The board's size; the side panel uses it too so the two line up. */
   --board: min(100vw - 2rem, 100dvh - 15rem, 640px);
+}
+.cb-frame {
   --frame: 15px;
   --frame-color: #7d371d;
   width: var(--board-size, var(--board));
@@ -142,17 +157,19 @@ body {
 }
 
 @media (min-width: 1100px) {
-  .cb-frame {
-    --board: min(100vw - 30rem, 100dvh - 9rem, 720px);
+  :root {
+    --board: min(100vw - 33rem, 100dvh - 9rem, 720px);
   }
 }
 
 @media (max-width: 599px) {
-  .cb-frame {
+  :root {
     --board: min(
       100vw - env(safe-area-inset-left) - env(safe-area-inset-right),
       100dvh - 15rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)
     );
+  }
+  .cb-frame {
     border-radius: 0;
     border-left: 0;
     border-right: 0;
@@ -487,6 +504,275 @@ body {
 /* Paused: the board dims under the pause card. */
 .cb-frame[data-paused="true"] .cb-board {
   filter: saturate(0.6) brightness(0.92);
+}
+
+/* ───────────────────────── Scoreboard (components/Hud.tsx) ───────────────────────── */
+
+:root {
+  --hud-score: #145a32;
+  --hud-gold: #b97824;
+  --hud-ring-on: #2f9446;
+  --hud-ring-off: #dedbd5;
+  --hud-floor-dark: #77736d;
+  --hud-floor-light: #f4eee2;
+  --hud-divider: #e8e3db;
+}
+:root[data-theme="dark"] {
+  --hud-score: #7fd19c;
+  --hud-gold: #e8a94a;
+  --hud-ring-on: #5cc174;
+  --hud-ring-off: #3d3a35;
+  --hud-floor-dark: #8a857d;
+  --hud-floor-light: #302e2a;
+  --hud-divider: #3a3733;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --hud-score: #7fd19c;
+    --hud-gold: #e8a94a;
+    --hud-ring-on: #5cc174;
+    --hud-ring-off: #3d3a35;
+    --hud-floor-dark: #8a857d;
+    --hud-floor-light: #302e2a;
+    --hud-divider: #3a3733;
+  }
+}
+
+.hud {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  padding: 14px 6px 10px;
+  background: var(--surface);
+  border-radius: 1.25rem;
+  box-shadow: 0 0 0 1px var(--line), 0 3px 10px rgb(40 34 24 / 0.07);
+}
+.hud-metric {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  align-items: center;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+.hud-metric + .hud-metric {
+  border-left: 1px solid var(--hud-divider);
+}
+.hud-label {
+  margin: 0 0 6px;
+  color: var(--fg);
+  font-size: clamp(10px, 3.6cqi, 14px);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Score */
+.hud-score {
+  font-family: "Roboto Slab", Rockwell, "Courier New", serif;
+  font-weight: 800;
+  font-size: clamp(30px, 15cqi, 78px);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--hud-score);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The checkerboard floor under a number, fading away from the viewer. */
+.hud-floor {
+  width: 86%;
+  height: clamp(12px, 6cqi, 32px);
+  margin-top: 4px;
+  opacity: 0.7;
+  transform: perspective(90px) rotateX(42deg);
+  background-color: var(--hud-floor-light);
+  background-image: conic-gradient(var(--hud-floor-dark) 25%, transparent 0 50%, var(--hud-floor-dark) 0 75%, transparent 0);
+  background-size: clamp(14px, 6.5cqi, 36px) clamp(14px, 6.5cqi, 36px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 15%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 15%, transparent 100%);
+}
+.hud-floor-small {
+  width: 72%;
+}
+
+/* Streak */
+.hud-streak {
+  display: grid;
+  justify-items: center;
+  color: var(--hud-gold);
+  transition: opacity 0.2s, filter 0.2s;
+}
+.hud-streak-cold {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.hud-flame {
+  width: clamp(16px, 7.5cqi, 34px);
+  height: auto;
+  margin-bottom: -2px;
+  transform-origin: 50% 90%;
+}
+.hud-streak-fire .hud-flame {
+  animation: hud-flicker 0.9s ease-in-out infinite;
+  filter: drop-shadow(0 0 5px rgb(255 160 40 / 0.55));
+}
+@keyframes hud-flicker {
+  0%, 100% { transform: scale(1) rotate(-2deg); }
+  50% { transform: scale(1.12, 1.18) rotate(2deg); }
+}
+.hud-laurels {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0px, 1cqi, 7px);
+}
+.hud-laurel {
+  width: clamp(14px, 8.5cqi, 40px);
+  height: auto;
+}
+.hud-streak-value {
+  font-family: "Roboto Slab", Rockwell, "Courier New", serif;
+  font-weight: 800;
+  font-size: clamp(24px, 12cqi, 56px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  min-width: 1ch;
+}
+
+/* Time */
+.hud-timer {
+  position: relative;
+  width: min(100%, clamp(64px, 27cqi, 150px));
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+.hud-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hud-seg {
+  stroke: var(--hud-ring-off);
+  stroke-linecap: butt;
+  transition: stroke 0.3s;
+}
+.hud-seg-on {
+  stroke: var(--hud-ring-on);
+}
+.hud-seg-crit {
+  stroke: var(--danger);
+}
+.hud-time {
+  position: relative;
+  font-family: "Roboto Slab", Rockwell, "Courier New", serif;
+  font-weight: 800;
+  font-size: clamp(18px, 8.5cqi, 44px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--hud-score);
+  font-variant-numeric: tabular-nums;
+}
+.hud-time small {
+  font-size: 0.6em;
+  letter-spacing: 0;
+}
+.hud-timer-crit .hud-time {
+  color: var(--danger);
+  animation: hud-pulse 1s ease-in-out infinite;
+}
+@keyframes hud-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* ───────────────────────── Coach chat (components/CoachChat.tsx) ───────────────────────── */
+
+.coach-avatar {
+  position: relative;
+  flex-shrink: 0;
+  display: block;
+}
+.coach-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 50%;
+  user-select: none;
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 4.5px var(--accent-soft);
+}
+.coach-mood {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  font-size: 0.95em;
+  line-height: 1;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 2px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+
+/* A speech bubble from the coach, with a little tail on its top-left. */
+.coach-bubble {
+  position: relative;
+  align-self: flex-start;
+  max-width: 100%;
+  margin: 0 0 0 10px;
+  padding: 0.55rem 0.85rem;
+  border-radius: 4px 16px 16px 16px;
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  transform-origin: 0 0;
+}
+.coach-bubble::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 0;
+  border: 7px solid transparent;
+  border-top-color: var(--surface-2);
+  border-right-color: var(--surface-2);
+}
+.coach-bubble-new {
+  background: var(--accent-soft);
+  font-weight: 500;
+  animation: bubble-in 0.35s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.coach-bubble-new::before {
+  border-top-color: var(--accent-soft);
+  border-right-color: var(--accent-soft);
+}
+@keyframes bubble-in {
+  from { transform: scale(0.6) translateY(6px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* "…" while the coach is typing. */
+.coach-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0.7rem 0.85rem;
+}
+.coach-typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: typing 1s ease-in-out infinite;
+}
+.coach-typing i:nth-child(2) { animation-delay: 0.15s; }
+.coach-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
 
 /* ───────────────────────── Motion ───────────────────────── */

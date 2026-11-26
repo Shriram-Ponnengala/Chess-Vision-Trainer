@@ -3,7 +3,10 @@ import { Home, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, Star } from 'lu
 import { GameState, type Coordinate, type GameStats, type MoveHistory, type Difficulty } from './types';
 import { MAIN_DURATION, DIFFICULTY_SETTINGS, getRandomCoordinate, coordinateToString } from './constants';
 import Board, { type DropStatus, type PointsChip, type SquareMark } from './components/Board';
-import { Brand, Button, Card, IconButton, Meter, Stat, ThemeToggle } from './components/ui';
+import { Brand, Button, Card, IconButton, Meter, ThemeToggle } from './components/ui';
+import Hud from './components/Hud';
+import CoachChat, { CoachLatest, type CoachMessage } from './components/CoachChat';
+import { coach, type CoachLine } from './services/coach';
 import { getCoachFeedback } from './services/geminiService';
 import { playSound, type Sound } from './services/sound';
 
@@ -47,6 +50,11 @@ const App: React.FC = () => {
   const [burstId, setBurstId] = useState(0);
   const [shakeId, setShakeId] = useState(0);
   const [streakNote, setStreakNote] = useState<string | null>(null);
+  // The VCA Coach's chat: his last few lines, and whether he is "typing".
+  const [coachMsgs, setCoachMsgs] = useState<CoachMessage[]>([]);
+  const [coachTyping, setCoachTyping] = useState(false);
+  const coachIdRef = useRef(0);
+  const coachAtRef = useRef(0);
 
   const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10) || 0);
   const [isNewBest, setIsNewBest] = useState(false);
@@ -96,6 +104,29 @@ const App: React.FC = () => {
     historyRef.current.push({ target, wasCorrect, timeTakenMs: Date.now() - spawnAtRef.current, phase: 'main' });
   };
 
+  /**
+   * The coach says something: "typing" for a moment, then the bubble. Chatter
+   * (not important) is skipped if he spoke in the last 2.5s, so he never spams.
+   */
+  const say = (line: CoachLine, important = true) => {
+    if (!important && Date.now() - coachAtRef.current < 2500) return;
+    coachAtRef.current = Date.now();
+    setCoachTyping(true);
+    later(() => {
+      setCoachTyping(false);
+      setCoachMsgs((m) => [...m, { id: ++coachIdRef.current, ...line }].slice(-6));
+    }, 450);
+  };
+  const coachQuiet = () => {
+    setCoachTyping(false);
+  };
+  /** Misses in a row, counting the one just recorded. */
+  const missRun = () => {
+    let n = 0;
+    for (let i = historyRef.current.length - 1; i >= 0 && !historyRef.current[i].wasCorrect; i--) n++;
+    return n;
+  };
+
   const spawn = () => {
     const prev = dropRef.current?.target;
     let target = getRandomCoordinate();
@@ -115,6 +146,7 @@ const App: React.FC = () => {
     if (!d) return;
     setStats((s) => ({ ...s, misses: s.misses + 1, streak: 0 }));
     record(d.target, false);
+    say(missRun() >= 3 && missRun() % 3 === 0 ? coach.struggle() : coach.slow(d.target));
     setDropBoth({ ...d, progress: 100, status: 'crash' });
     setMarks({ [coordinateToString(d.target)]: 'answer' });
     sound('boom');
@@ -130,6 +162,9 @@ const App: React.FC = () => {
     if (tapped === wanted) {
       const streak = statsRef.current.streak + 1;
       const milestone = streak % 5 === 0;
+      const ms = Date.now() - spawnAtRef.current;
+      const first = statsRef.current.hits === 0;
+      const afterMiss = historyRef.current.length > 0 && !historyRef.current[historyRef.current.length - 1].wasCorrect;
       const gained = milestone ? 15 : 5;
       setStats((s) => ({
         ...s,
@@ -139,6 +174,13 @@ const App: React.FC = () => {
         hits: s.hits + 1,
       }));
       record(d.target, true);
+      // The coach: always on a streak, a first hit or a comeback; now and then otherwise.
+      if (milestone) say(coach.streak(streak));
+      else if (first) say(coach.first(tapped));
+      else if (afterMiss) say(coach.comeback());
+      else if (ms < 1000 && Math.random() < 0.6) say(coach.fast(tapped, ms / 1000), false);
+      else if (Math.random() < 0.25) say(coach.nice(tapped), false);
+      else if (Math.random() < 0.12) say(coach.tip(), false);
       setMarks({ [tapped]: 'hit' });
       setPoints({ id: Date.now(), coord, text: `+${gained}`, good: true });
       setDropBoth({ ...d, status: 'landing' });
@@ -154,6 +196,8 @@ const App: React.FC = () => {
     } else {
       setStats((s) => ({ ...s, score: Math.max(0, s.score - 5), streak: 0, misses: s.misses + 1 }));
       record(d.target, false);
+      // A hint every time; after every third miss in a row, encouragement and a method instead.
+      say(missRun() >= 3 && missRun() % 3 === 0 ? coach.struggle() : coach.wrong(d.target, coord));
       setMarks({ [tapped]: 'miss', [wanted]: 'answer' });
       setPoints({ id: Date.now(), coord, text: '−5', good: false });
       // The plane flies to the wrong square and explodes there; the board shakes as it hits.
@@ -181,6 +225,7 @@ const App: React.FC = () => {
     setDropBoth(null);
     setMarks({});
     setStreakNote(null);
+    coachQuiet();
 
     const missedSquares = [...new Set(historyRef.current.filter((h) => !h.wasCorrect).map((h) => coordinateToString(h.target)))];
     setMissed(missedSquares);
@@ -211,6 +256,8 @@ const App: React.FC = () => {
     statsRef.current = EMPTY_STATS;
     setStatsState(EMPTY_STATS);
     historyRef.current = [];
+    setCoachMsgs([]);
+    coachQuiet();
     timeRef.current = MAIN_DURATION;
     setTimeLeft(MAIN_DURATION);
     setPaused(false);
@@ -218,6 +265,7 @@ const App: React.FC = () => {
     setStreakNote(null);
     setPhase(GameState.MAIN_PLAY);
     spawn();
+    say(coach.start(difficulty));
   };
 
   const goMenu = () => {
@@ -229,6 +277,7 @@ const App: React.FC = () => {
     setMarks({});
     setPoints(null);
     setStreakNote(null);
+    coachQuiet();
   };
 
   // The fall: one frame at a time, faster as the minute goes on.
@@ -263,6 +312,8 @@ const App: React.FC = () => {
       setTimeLeft(timeRef.current);
       if (timeRef.current <= 0) endGame();
       else if (timeRef.current <= 10) sound('tick');
+      if (timeRef.current === 30) say(coach.half());
+      else if (timeRef.current === 10) say(coach.last10());
     }, 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,7 +346,6 @@ const App: React.FC = () => {
 
   const playing = phase === GameState.MAIN_PLAY;
   const accuracy = accuracyOf(stats);
-  const critical = timeLeft <= 10;
 
   // ───────────── Side panels ─────────────
 
@@ -370,9 +420,12 @@ const App: React.FC = () => {
   );
 
   const fallLeft = drop ? Math.max(0, 100 - drop.progress) : 0;
+  const toBonus = 5 - (stats.streak % 5);
+  const accuracyText = stats.hits + stats.misses ? `${accuracy}%` : '–';
+
   const playPanel = (
     <>
-      {/* What to find: big, so it reads from across the room. Hidden on phones (the token says it). */}
+      {/* What to find: big, so it reads from across the room. Hidden on phones (the plane says it). */}
       <Card className="hidden text-center xl:block">
         <p className="text-xs font-semibold tracking-wide text-muted uppercase">Find</p>
         <p key={drop?.id} className="pop-in font-brand text-6xl leading-tight font-semibold">
@@ -383,25 +436,42 @@ const App: React.FC = () => {
         </div>
       </Card>
 
-      <Card className="p-3.5">
-        <div className="flex items-start">
-          <Stat label="Score" value={stats.score} tone="accent" bumpKey={stats.hits || undefined} />
-          <Stat label="Streak" value={stats.streak >= 5 ? `🔥${stats.streak}` : stats.streak} tone={stats.streak >= 5 ? 'hint' : undefined} />
-          <Stat label="Accuracy" value={stats.hits + stats.misses ? `${accuracy}%` : '–'} />
-          <Stat label="Time" value={`${timeLeft}s`} tone={critical ? 'danger' : undefined} />
-        </div>
-        <div className="mt-3">
-          <Meter value={(timeLeft / MAIN_DURATION) * 100} tone={critical ? 'danger' : 'accent'} />
-        </div>
-      </Card>
+      <Hud score={stats.score} streak={stats.streak} timeLeft={timeLeft} duration={MAIN_DURATION} scoreKey={stats.hits || undefined} />
 
-      {streakNote && (
-        <p key={streakNote} className="pop-in rounded-2xl bg-accent-soft px-4 py-2.5 text-center font-semibold text-accent" aria-live="polite">
-          {streakNote}
-        </p>
-      )}
+      {/* How close the next +10 bonus is; it says so when it lands. */}
+      <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-2.5 shadow-sm ring-1 ring-line" aria-live="polite">
+        {streakNote ? (
+          <p key={streakNote} className="pop-in flex-1 text-center font-semibold text-accent">
+            {streakNote}
+          </p>
+        ) : (
+          <>
+            <span className="flex gap-1" aria-hidden>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  className={`size-3.5 rounded-[4px] transition-colors ${i < stats.streak % 5 ? 'bg-[#f0a43a]' : 'bg-progress-off'}`}
+                />
+              ))}
+            </span>
+            <span className="text-sm text-muted">
+              <span className="font-semibold text-fg tabular-nums">{toBonus}</span> more in a row for{' '}
+              <span className="font-semibold text-hint">+10</span>
+            </span>
+          </>
+        )}
+      </div>
 
-      <div className="hidden gap-2 xl:flex">
+      {/* The VCA Coach chats as you play: cheers, wow moments and hints after a mistake. */}
+      <CoachChat messages={coachMsgs} typing={coachTyping} accuracy={accuracyText} />
+      <CoachLatest message={coachMsgs[coachMsgs.length - 1]} />
+
+      {/* Phones: accuracy under the scoreboard (no room for the list). */}
+      <p className="text-center text-xs text-muted xl:hidden">
+        Accuracy <span className="font-semibold text-fg tabular-nums">{accuracyText}</span>
+      </p>
+
+      <div className="hidden items-center gap-2 xl:flex">
         <Button onClick={() => setPaused((p) => !p)} className="flex-1" disabled={!playing}>
           {paused ? <Play size={16} className="fill-current" /> : <Pause size={16} className="fill-current" />}
           {paused ? 'Resume' : 'Pause'}
@@ -409,8 +479,8 @@ const App: React.FC = () => {
         <Button variant="ghost" onClick={goMenu}>
           End
         </Button>
+        <span className="text-xs text-muted">Space pauses</span>
       </div>
-      <p className="hidden px-1 text-xs text-muted xl:block">Space pauses · Leaving the tab pauses too</p>
     </>
   );
 
@@ -418,7 +488,8 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-dvh flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] select-none">
-      <header className="sticky top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-center bg-bg/85 px-2 py-2 backdrop-blur sm:px-4">
+      {/* Same bar as the VCAstudio student page: white, a hairline and a soft shadow under it, frosted. */}
+      <header className="sticky top-0 z-40 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-surface/85 px-2 shadow-[0_1px_0_rgb(0_0_0/0.06),0_8px_24px_-16px_rgb(0_0_0/0.35)] backdrop-blur-md backdrop-saturate-150 sm:px-4 dark:shadow-[0_1px_0_rgb(255_255_255/0.08),0_8px_24px_-16px_rgb(0_0_0/0.8)]">
         <div className="flex items-center">
           {phase !== GameState.MENU && (
             <IconButton label="Back to menu" onClick={goMenu}>
@@ -446,7 +517,7 @@ const App: React.FC = () => {
       {phase === GameState.MENU ? (
         <main className="flex flex-1 flex-col justify-center">{homeScreen}</main>
       ) : (
-        <main className="flex flex-1 flex-col items-center justify-center gap-4 pb-4 xl:flex-row xl:items-start xl:justify-center xl:gap-6 xl:px-6 xl:pt-4">
+        <main className="flex flex-1 flex-col items-center justify-center gap-4 pt-3 pb-4 xl:flex-row xl:items-start xl:justify-center xl:gap-6 xl:px-6 xl:pt-4">
           <div className="relative">
             <Board
               onSquare={onSquare}
@@ -480,7 +551,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <aside className="flex w-full max-w-[40rem] flex-col gap-3 px-3 xl:w-80 xl:px-0">
+          <aside className="flex w-full max-w-[40rem] flex-col gap-3 px-3 xl:h-[var(--board)] xl:w-[23rem] xl:px-0">
             {playPanel}
           </aside>
         </main>
