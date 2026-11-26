@@ -41,7 +41,7 @@ export function IconButton({ label, children, ...props }: React.ButtonHTMLAttrib
   );
 }
 
-/** "♞ Coordinate Trainer" over "by Venture Chess Academy". */
+/** "♞ Square Trainer" over "by Venture Chess Academy". */
 export function Brand() {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
@@ -49,7 +49,7 @@ export function Brand() {
         <span aria-hidden className="mr-1 text-accent">
           ♞
         </span>
-        Coordinate Trainer
+        Square Trainer
       </p>
       <p className="text-[0.6875rem] leading-none text-muted">
         by{' '}

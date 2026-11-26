@@ -1,5 +1,5 @@
 {
-  "name": "Chess Coordinate Trainer",
+  "name": "Square Trainer",
   "description": "Master chessboard coordinates at jet speed with customizable difficulty, streak animations, audio cues, and performance tracking.",
   "requestFramePermissions": [],
   "majorCapabilities": [

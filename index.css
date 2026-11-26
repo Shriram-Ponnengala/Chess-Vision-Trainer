@@ -775,6 +775,79 @@ body {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* ───────────────────────── Results card (components/FlightLog.tsx) ───────────────────────── */
+
+/* A boarding pass: rounded ticket and stub, with half-circle notches cut where they tear apart. */
+.flight-log {
+  filter: drop-shadow(0 18px 40px rgb(0 0 0 / 0.35));
+}
+.ticket-top,
+.ticket-stub {
+  --notch: 12px;
+  overflow: hidden;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 51% 100%;
+  mask-size: 51% 100%;
+}
+.ticket-top {
+  border-radius: 1.5rem 1.5rem 0 0;
+  -webkit-mask-image:
+    radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000),
+    radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000);
+  mask-image:
+    radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000),
+    radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000);
+  -webkit-mask-position: left, right;
+  mask-position: left, right;
+}
+.ticket-stub {
+  border-radius: 0 0 1.5rem 1.5rem;
+  -webkit-mask-image:
+    radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000),
+    radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000);
+  mask-image:
+    radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000),
+    radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000);
+  -webkit-mask-position: left, right;
+  mask-position: left, right;
+}
+.ticket-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The little plane flies along the route once, from take-off to landing. */
+.route-plane {
+  left: 0;
+  translate: -50% -55%;
+  animation: route-fly 1.4s cubic-bezier(0.45, 0, 0.25, 1) 0.2s both;
+}
+@keyframes route-fly {
+  from { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  to { left: 100%; opacity: 1; }
+}
+
+/* A decorative barcode: bars of different widths. */
+.barcode {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--fg) 0 2px,
+    transparent 2px 4px,
+    var(--fg) 4px 5px,
+    transparent 5px 7px,
+    var(--fg) 7px 10px,
+    transparent 10px 11px,
+    var(--fg) 11px 12px,
+    transparent 12px 15px
+  );
+  opacity: 0.85;
+}
+
 /* ───────────────────────── Motion ───────────────────────── */
 
 @keyframes pop-in {

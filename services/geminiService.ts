@@ -1,5 +1,6 @@
 import type { MoveHistory } from '../types';
 
+/** The AI coach's note on a round, or '' when the service is off or fails. */
 export const getCoachFeedback = async (
   history: MoveHistory[],
   score: number,
@@ -17,13 +18,13 @@ export const getCoachFeedback = async (
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('Coach feedback API error:', errorData.error || response.statusText);
-      return 'Great effort! Review your missed squares to improve next time.';
+      return ''; // the results card writes its own note
     }
 
     const data = (await response.json()) as { feedback?: string };
-    return data.feedback || 'Great job practicing! Keep working on your visualization.';
+    return data.feedback || '';
   } catch (error) {
     console.error('Coach feedback request error:', error);
-    return 'Great effort! Review your missed squares to improve next time.';
+    return ''; // the results card writes its own note
   }
 };

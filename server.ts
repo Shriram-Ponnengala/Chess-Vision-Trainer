@@ -59,7 +59,7 @@ async function startServer() {
 
       const prompt = `
         You are a friendly, encouraging chess coach for a child aged 8-14.
-        Analyze this 'Coordinate Trainer' training session.
+        Analyze this 'Square Trainer' training session.
 
         Stats:
         - Score: ${score}

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Home, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, Star } from 'lucide-react';
+import { Home, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 import { GameState, type Coordinate, type GameStats, type MoveHistory, type Difficulty } from './types';
 import { MAIN_DURATION, DIFFICULTY_SETTINGS, getRandomCoordinate, coordinateToString } from './constants';
 import Board, { type DropStatus, type PointsChip, type SquareMark } from './components/Board';
 import { Brand, Button, Card, IconButton, Meter, ThemeToggle } from './components/ui';
 import Hud from './components/Hud';
+import FlightLog from './components/FlightLog';
 import CoachChat, { CoachLatest, type CoachMessage } from './components/CoachChat';
 import { coach, type CoachLine } from './services/coach';
 import { getCoachFeedback } from './services/geminiService';
@@ -31,7 +32,6 @@ function starsFor(s: GameStats) {
   if (s.hits >= 5 && acc >= 70) return 2;
   return s.hits > 0 ? 1 : 0;
 }
-const TITLES = ['Keep practising!', 'Good effort!', 'Well done!', 'Brilliant!'];
 
 const App: React.FC = () => {
   // Settings, remembered on this device.
@@ -59,6 +59,9 @@ const App: React.FC = () => {
   const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10) || 0);
   const [isNewBest, setIsNewBest] = useState(false);
   const [missed, setMissed] = useState<string[]>([]);
+  /** The round just finished, and its flight number (one more every round on this device). */
+  const [roundHistory, setRoundHistory] = useState<MoveHistory[]>([]);
+  const [flightNo, setFlightNo] = useState(0);
   const [coachFeedback, setCoachFeedback] = useState('');
   const [loadingFeedback, setLoadingFeedback] = useState(false);
 
@@ -229,6 +232,10 @@ const App: React.FC = () => {
 
     const missedSquares = [...new Set(historyRef.current.filter((h) => !h.wasCorrect).map((h) => coordinateToString(h.target)))];
     setMissed(missedSquares);
+    setRoundHistory([...historyRef.current]);
+    const flights = (parseInt(localStorage.getItem('cvt-flights') || '0', 10) || 0) + 1;
+    localStorage.setItem('cvt-flights', String(flights));
+    setFlightNo(flights);
 
     const best = parseInt(localStorage.getItem('chessCoordinateTrainerHighScore') || '0', 10) || 0;
     const newBest = s.score > best;
@@ -359,7 +366,7 @@ const App: React.FC = () => {
         </div>
         <div>
           <p className="text-xs font-semibold tracking-wide text-accent uppercase">Speed drill · 60 seconds</p>
-          <h1 className="mt-1 font-brand text-[2rem] leading-tight font-semibold sm:text-5xl">Coordinate Trainer</h1>
+          <h1 className="mt-1 font-brand text-[2rem] leading-tight font-semibold sm:text-5xl">Square Trainer</h1>
           <p className="mt-1.5 max-w-md text-[0.95rem] leading-relaxed text-muted sm:mt-2 sm:text-base">
             A square name falls down the board. Tap that square before it reaches the bottom. Learn every square by sight.
           </p>
@@ -558,11 +565,15 @@ const App: React.FC = () => {
       )}
 
       {phase === GameState.SUMMARY && (
-        <Summary
+        <FlightLog
           stats={stats}
+          history={roundHistory}
+          accuracy={accuracy}
+          stars={starsFor(stats)}
           isNewBest={isNewBest}
           highScore={highScore}
           missed={missed}
+          flightNo={flightNo}
           coachFeedback={coachFeedback}
           loadingFeedback={loadingFeedback}
           difficulty={difficulty}
@@ -573,108 +584,5 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-function Summary({
-  stats,
-  isNewBest,
-  highScore,
-  missed,
-  coachFeedback,
-  loadingFeedback,
-  difficulty,
-  onAgain,
-  onMenu,
-}: {
-  stats: GameStats;
-  isNewBest: boolean;
-  highScore: number;
-  missed: string[];
-  coachFeedback: string;
-  loadingFeedback: boolean;
-  difficulty: Difficulty;
-  onAgain: () => void;
-  onMenu: () => void;
-}) {
-  const stars = starsFor(stats);
-  const pace = PACES.find((p) => p.value === difficulty)!.name;
-  const items = [
-    { label: 'Accuracy', value: `${accuracyOf(stats)}%` },
-    { label: 'Best streak', value: stats.maxStreak },
-    { label: 'Right / wrong', value: `${stats.hits} / ${stats.misses}` },
-  ];
-  return (
-    <div className="fade-in fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]">
-      <div role="dialog" aria-label="Results" className="wd-card w-full max-w-md rounded-3xl bg-surface p-6 text-center shadow-2xl ring-1 ring-line sm:p-7">
-        <div className="flex justify-center gap-2" aria-label={`${stars} of 3 stars`}>
-          {[0, 1, 2].map((i) => (
-            <Star
-              key={i}
-              size={i === 1 ? 52 : 40}
-              className={`wd-star ${i === 1 ? '-mt-2' : 'mt-1'} ${i < stars ? 'fill-[#f5c518] text-[#e0a800]' : 'fill-progress-off text-progress-off'}`}
-              style={{ animationDelay: `${0.25 + i * 0.15}s` }}
-            />
-          ))}
-        </div>
-
-        <h2 className="wd-title mt-3 font-brand text-3xl font-semibold">{TITLES[stars]}</h2>
-        <p className="mt-0.5 text-sm text-muted">{pace} pace · 60 seconds</p>
-
-        {isNewBest && (
-          <p className="pop-in mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-hint-soft px-3 py-1 text-sm font-semibold text-hint">
-            <Trophy size={15} /> New personal best!
-          </p>
-        )}
-
-        <div className="wd-stat mt-4 rounded-2xl bg-surface-2 py-4" style={{ animationDelay: '0.35s' }}>
-          <p className="text-xs font-semibold tracking-wide text-muted uppercase">Score</p>
-          <p className="font-brand text-6xl leading-none font-semibold text-accent tabular-nums">{stats.score}</p>
-          {!isNewBest && highScore > 0 && <p className="mt-1 text-xs text-muted">Best: {highScore}</p>}
-        </div>
-
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {items.map((it, i) => (
-            <div key={it.label} className="wd-stat rounded-xl bg-surface-2 px-2 py-2.5" style={{ animationDelay: `${0.45 + i * 0.08}s` }}>
-              <p className="text-[0.7rem] text-muted">{it.label}</p>
-              <p className="text-lg font-semibold tabular-nums">{it.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {missed.length > 0 && (
-          <div className="mt-4 text-left">
-            <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Squares to practise</p>
-            <div className="flex flex-wrap gap-1.5">
-              {missed.slice(0, 16).map((sq) => (
-                <span key={sq} className="rounded-full bg-danger-soft px-2.5 py-0.5 font-brand text-sm font-semibold text-danger">
-                  {sq}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-2xl border border-[#f5c518]/40 bg-hint-soft px-4 py-3 text-left">
-          <p className="mb-0.5 text-xs font-semibold tracking-wide text-hint uppercase">♞ Coach's note</p>
-          <p className="text-[0.95rem] leading-relaxed">
-            {loadingFeedback ? (
-              <span className="text-muted italic">Looking at your session…</span>
-            ) : (
-              coachFeedback || 'Every round makes the board feel smaller. Keep going!'
-            )}
-          </p>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-2">
-          <Button variant="primary" size="lg" onClick={onAgain} className="w-full">
-            <RotateCcw size={18} /> Play again
-          </Button>
-          <Button variant="ghost" onClick={onMenu} className="w-full">
-            Home
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default App;
